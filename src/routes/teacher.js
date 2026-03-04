@@ -203,10 +203,9 @@ router.get(
         isReprint,
       });
 
-      res.status(200).json({
-        success: true,
-        ...paginateResponse(rows, total, page, limit),
-      });
+      res
+        .status(200)
+        .json({ success: true, ...paginateResponse(rows, total, page, limit) });
     } catch (err) {
       next(err);
     }
@@ -288,10 +287,9 @@ router.get("/medals", async (req, res, next) => {
       offset,
     });
 
-    res.status(200).json({
-      success: true,
-      ...paginateResponse(rows, total, page, limit),
-    });
+    res
+      .status(200)
+      .json({ success: true, ...paginateResponse(rows, total, page, limit) });
   } catch (err) {
     next(err);
   }
@@ -302,6 +300,7 @@ router.get("/medals", async (req, res, next) => {
 // ============================================================
 
 // GET /api/teacher/reports
+// FIX (WARNING): tambah score_* ke SELECT agar teacher bisa lihat scores yang sudah diisi
 router.get("/reports", async (req, res, next) => {
   try {
     const { teacherId } = teacherContext(req);
@@ -309,8 +308,12 @@ router.get("/reports", async (req, res, next) => {
 
     const [dataResult, countResult] = await Promise.all([
       query(
-        `SELECT r.id, r.enrollment_id, s.name AS student_name, m.name AS module_name,
+        `SELECT r.id, r.enrollment_id,
+                s.name AS student_name,
+                m.name AS module_name,
                 r.academic_year, r.period, r.word_count,
+                r.score_creativity, r.score_critical_thinking,
+                r.score_attention, r.score_responsibility, r.score_coding_skills,
                 r.drive_file_id, r.drive_file_name, r.drive_uploaded_at,
                 r.created_at, r.updated_at
          FROM reports r
@@ -343,8 +346,13 @@ router.get("/reports", async (req, res, next) => {
 });
 
 // POST /api/teacher/reports
-// Flow: validasi → insert DB → generate PDF dari template → auto upload ke Drive
-// Jika PDF/Drive gagal: report DB tetap valid, response 201 dengan drive_upload_failed: true
+// Validation order:
+//   1. enrollment exists & assigned to teacher
+//   2. cert scan uploaded
+//   3. report not already exists   ← FIX: dipindah ke sini agar 409 didahulukan dari 400
+//   4. word count >= 200
+//   5. insert DB
+//   6. generate PDF + auto-upload Drive
 router.post("/reports", validate(createReportBody), async (req, res, next) => {
   try {
     const { teacherId, centerId, driveFolderId, teacherName } =
@@ -361,12 +369,11 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
       score_coding_skills,
     } = req.body;
 
-    // Validasi enrollment milik teacher ini
+    // 1. Validasi enrollment
     const enrollment = await query(
-      `SELECT e.id, s.name AS student_name, m.name AS module_name
+      `SELECT e.id, s.name AS student_name
          FROM enrollments e
          JOIN students s ON s.id = e.student_id
-         JOIN modules m  ON m.id = e.module_id
          WHERE e.id = $1 AND e.teacher_id = $2 AND e.center_id = $3 AND e.is_active = TRUE`,
       [enrollment_id, teacherId, centerId],
     );
@@ -382,7 +389,7 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
 
     const { student_name: studentName } = enrollment.rows[0];
 
-    // Cek scan certificate sudah di-upload
+    // 2. Cek scan certificate sudah di-upload
     const scanCheck = await query(
       `SELECT id FROM certificates WHERE enrollment_id = $1 AND scan_file_id IS NOT NULL LIMIT 1`,
       [enrollment_id],
@@ -395,16 +402,7 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
       });
     }
 
-    // Validasi word count min 200
-    const wordCountResult = validateWordCount(content);
-    if (!wordCountResult.valid) {
-      return res.status(400).json({
-        success: false,
-        message: `Report content must be at least ${wordCountResult.min} words. Current: ${wordCountResult.count} words.`,
-      });
-    }
-
-    // Cek report sudah ada
+    // 3. FIX: Cek report sudah ada — SEBELUM word count agar 409 > 400
     const existingReport = await query(
       `SELECT id FROM reports WHERE enrollment_id = $1`,
       [enrollment_id],
@@ -417,7 +415,16 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
       });
     }
 
-    // Insert report ke DB
+    // 4. Validasi word count min 200
+    const wordCountResult = validateWordCount(content);
+    if (!wordCountResult.valid) {
+      return res.status(400).json({
+        success: false,
+        message: `Report content must be at least ${wordCountResult.min} words. Current: ${wordCountResult.count} words.`,
+      });
+    }
+
+    // 5. Insert report ke DB
     const result = await query(
       `INSERT INTO reports (
            enrollment_id, teacher_id, academic_year, period,
@@ -425,6 +432,8 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
            score_responsibility, score_coding_skills, content, word_count
          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING id, enrollment_id, academic_year, period, word_count,
+                   score_creativity, score_critical_thinking, score_attention,
+                   score_responsibility, score_coding_skills,
                    drive_file_id, drive_uploaded_at, created_at`,
       [
         enrollment_id,
@@ -450,10 +459,7 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
       wordCount: wordCountResult.count,
     });
 
-    // ============================================================
-    // AUTO GENERATE PDF + UPLOAD KE DRIVE
-    // ============================================================
-
+    // 6. AUTO GENERATE PDF + UPLOAD KE DRIVE
     if (!driveFolderId) {
       logger.warn("Auto upload skipped: teacher has no Drive folder", {
         teacherId,
@@ -495,9 +501,7 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
       });
 
       await query(
-        `UPDATE reports
-           SET drive_file_id = $1, drive_file_name = $2, drive_uploaded_at = NOW(), updated_at = NOW()
-           WHERE id = $3`,
+        `UPDATE reports SET drive_file_id = $1, drive_file_name = $2, drive_uploaded_at = NOW(), updated_at = NOW() WHERE id = $3`,
         [fileId, uploadedName, report.id],
       );
 
@@ -540,7 +544,7 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
 
 // PATCH /api/teacher/reports/:id
 // Hanya bisa update jika drive_file_id masih NULL.
-// Setelah update, otomatis coba re-generate PDF + re-upload ke Drive.
+// Setelah update, otomatis coba re-generate PDF + re-upload.
 router.patch(
   "/reports/:id",
   validate(idParam, "params"),
@@ -587,7 +591,7 @@ router.patch(
 
       const existingData = existing.rows[0];
 
-      // Validasi word count jika content diupdate
+      // Validasi word count jika content di-update
       let wordCount;
       if (content !== undefined) {
         const wordCountResult = validateWordCount(content);
@@ -600,6 +604,7 @@ router.patch(
         wordCount = wordCountResult.count;
       }
 
+      // FIX: Kumpulkan dirty fields, pastikan ada setidaknya satu
       const dirtyFields = {
         content,
         word_count: wordCount,
@@ -612,9 +617,21 @@ router.patch(
         score_coding_skills,
       };
 
-      Object.keys(dirtyFields).forEach(
-        (k) => dirtyFields[k] === undefined && delete dirtyFields[k],
-      );
+      // Hapus undefined (field tidak dikirim), tapi pertahankan null (user sengaja clear)
+      Object.keys(dirtyFields).forEach((k) => {
+        if (dirtyFields[k] === undefined) delete dirtyFields[k];
+      });
+
+      // FIX (BUG): guard jika tidak ada field yang berubah (seharusnya sudah dicegah Zod refine,
+      // tapi double-check di sini untuk keamanan)
+      if (Object.keys(dirtyFields).length === 0) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message: "At least one field must be provided",
+          });
+      }
 
       const { setClause, values, nextIndex } = buildSet(dirtyFields);
 
@@ -622,6 +639,8 @@ router.patch(
         `UPDATE reports ${setClause}
          WHERE id = $${nextIndex}
          RETURNING id, enrollment_id, academic_year, period, word_count,
+                   score_creativity, score_critical_thinking, score_attention,
+                   score_responsibility, score_coding_skills,
                    drive_file_id, drive_uploaded_at, updated_at`,
         [...values, req.params.id],
       );
@@ -718,7 +737,7 @@ router.patch(
 );
 
 // ============================================================
-// STOCK INFO (read-only untuk teacher)
+// STOCK INFO (read-only)
 // ============================================================
 
 // GET /api/teacher/stock

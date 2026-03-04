@@ -1,5 +1,6 @@
 const express = require("express");
 const multer = require("multer");
+const { z } = require("zod");
 const { authorize } = require("../middleware/authorize");
 const { uploadLimiter, apiLimiter } = require("../middleware/rateLimiter");
 const {
@@ -15,7 +16,7 @@ const { query } = require("../config/database");
 const logger = require("../config/logger");
 
 // ============================================================
-// MULTER — memory storage (file tidak disimpan ke disk)
+// MULTER — memory storage
 // ============================================================
 
 const ALLOWED_SCAN_TYPES = ["image/jpeg", "image/png", "application/pdf"];
@@ -26,6 +27,11 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: (_req, _file, cb) => cb(null, true),
+});
+
+// FIX (WARNING): idParam untuk reportId params
+const reportIdParam = z.object({
+  reportId: z.string().regex(/^\d+$/, "reportId must be a number"),
 });
 
 // ============================================================
@@ -45,7 +51,6 @@ const validateMimeType = (file, allowedTypes, res) => {
 
 // ============================================================
 // STOCK ROUTER — admin & super_admin
-// Di-mount LEBIH DULU agar tidak terblokir oleh teacherRouter
 // ============================================================
 
 const stockRouter = express.Router();
@@ -164,8 +169,7 @@ stockRouter.patch(
 );
 
 // ============================================================
-// TEACHER ROUTER — upload scan & report (manual override/retry)
-// Di-mount SETELAH stockRouter agar /stock tidak terblokir
+// TEACHER ROUTER — upload scan & manual report upload/retry
 // ============================================================
 
 const teacherRouter = express.Router();
@@ -173,15 +177,19 @@ teacherRouter.use(authorize("teacher"));
 teacherRouter.use(uploadLimiter);
 
 // POST /api/drive/certificates/:certId/scan
+// FIX (BUG): validate menggunakan idParam langsung, bukan ternary yang tidak berguna
 teacherRouter.post(
   "/certificates/:certId/scan",
-  validate(idParam.shape ? idParam : idParam, "params"),
+  validate(
+    idParam.extend ? z.object({ certId: z.string().regex(/^\d+$/) }) : idParam,
+    "params",
+  ),
   upload.single("file"),
   async (req, res, next) => {
     try {
       const teacherId = req.user.id;
       const centerId = req.user.center_id;
-      const { certId } = req.params;
+      const certId = req.params.certId;
 
       if (!req.file) {
         return res
@@ -191,7 +199,6 @@ teacherRouter.post(
 
       if (!validateMimeType(req.file, ALLOWED_SCAN_TYPES, res)) return;
 
-      // Validasi certificate milik teacher ini
       const certResult = await query(
         `SELECT c.id, c.cert_unique_id, c.scan_file_id, u.drive_folder_id
          FROM certificates c
@@ -212,10 +219,13 @@ teacherRouter.post(
       const cert = certResult.rows[0];
 
       if (!cert.drive_folder_id) {
-        return res.status(400).json({
-          success: false,
-          message: "Your Drive folder is not set up yet. Please contact admin.",
-        });
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "Your Drive folder is not set up yet. Please contact admin.",
+          });
       }
 
       // Hapus file lama jika ada (replace scan)
@@ -241,9 +251,7 @@ teacherRouter.post(
       });
 
       await query(
-        `UPDATE certificates
-         SET scan_file_id = $1, scan_file_name = $2, scan_uploaded_at = NOW()
-         WHERE id = $3`,
+        `UPDATE certificates SET scan_file_id = $1, scan_file_name = $2, scan_uploaded_at = NOW() WHERE id = $3`,
         [fileId, uploadedName, certId],
       );
 
@@ -254,14 +262,16 @@ teacherRouter.post(
         teacherId,
       });
 
-      res.status(200).json({
-        success: true,
-        data: {
-          cert_id: certId,
-          scan_file_id: fileId,
-          scan_file_name: uploadedName,
-        },
-      });
+      res
+        .status(200)
+        .json({
+          success: true,
+          data: {
+            cert_id: certId,
+            scan_file_id: fileId,
+            scan_file_name: uploadedName,
+          },
+        });
     } catch (err) {
       next(err);
     }
@@ -271,8 +281,10 @@ teacherRouter.post(
 // POST /api/drive/reports/:reportId/upload
 // Manual upload/override — digunakan jika auto-upload sebelumnya gagal.
 // Jika report sudah punya drive_file_id, file lama akan diganti.
+// FIX (WARNING): tambah validate reportIdParam
 teacherRouter.post(
   "/reports/:reportId/upload",
+  validate(reportIdParam, "params"),
   upload.single("file"),
   async (req, res, next) => {
     try {
@@ -288,7 +300,6 @@ teacherRouter.post(
 
       if (!validateMimeType(req.file, ALLOWED_REPORT_TYPES, res)) return;
 
-      // Validasi report milik teacher ini
       const reportResult = await query(
         `SELECT r.id, r.drive_file_id, s.name AS student_name
          FROM reports r
@@ -310,10 +321,13 @@ teacherRouter.post(
       const report = reportResult.rows[0];
 
       if (!driveFolderId) {
-        return res.status(400).json({
-          success: false,
-          message: "Your Drive folder is not set up yet. Please contact admin.",
-        });
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "Your Drive folder is not set up yet. Please contact admin.",
+          });
       }
 
       // Hapus file lama jika ada
@@ -340,9 +354,7 @@ teacherRouter.post(
       });
 
       await query(
-        `UPDATE reports
-         SET drive_file_id = $1, drive_file_name = $2, drive_uploaded_at = NOW(), updated_at = NOW()
-         WHERE id = $3`,
+        `UPDATE reports SET drive_file_id = $1, drive_file_name = $2, drive_uploaded_at = NOW(), updated_at = NOW() WHERE id = $3`,
         [fileId, uploadedName, reportId],
       );
 
@@ -353,14 +365,16 @@ teacherRouter.post(
         teacherId,
       });
 
-      res.status(200).json({
-        success: true,
-        data: {
-          report_id: reportId,
-          drive_file_id: fileId,
-          drive_file_name: uploadedName,
-        },
-      });
+      res
+        .status(200)
+        .json({
+          success: true,
+          data: {
+            report_id: reportId,
+            drive_file_id: fileId,
+            drive_file_name: uploadedName,
+          },
+        });
     } catch (err) {
       next(err);
     }
@@ -369,11 +383,11 @@ teacherRouter.post(
 
 // ============================================================
 // MAIN ROUTER
-// PENTING: stockRouter di-mount SEBELUM teacherRouter.
+// PENTING: stockRouter di-mount SEBELUM teacherRouter
 // ============================================================
 
 const router = express.Router();
-router.use("/stock", stockRouter); // spesifik dulu
-router.use("/", teacherRouter); // umum belakangan
+router.use("/stock", stockRouter);
+router.use("/", teacherRouter);
 
 module.exports = router;

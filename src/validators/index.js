@@ -17,16 +17,15 @@ const paginationQuery = z.object({
   is_active: z.enum(["true", "false"]).optional(),
 });
 
-const scoreEnum = z.enum(["A+", "A", "B+", "B"]).nullable().optional();
+// FIX: Zod v4 — gunakan z.union agar null dan undefined keduanya valid
+// z.enum().nullable().optional() bisa berperilaku tidak konsisten di v4
+const scoreEnum = z
+  .union([z.enum(["A+", "A", "B+", "B"]), z.null()])
+  .optional();
+
 const ptcDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format");
-
-// ============================================================
-// AUTH
-// ============================================================
-
-const authValidators = {};
 
 // ============================================================
 // SUPER ADMIN — Centers
@@ -42,7 +41,7 @@ const updateCenterBody = z
     name: z.string().min(1).max(255).optional(),
     address: z.string().max(500).nullable().optional(),
   })
-  .refine((data) => data.name || data.address !== undefined, {
+  .refine((data) => data.name !== undefined || data.address !== undefined, {
     message: "At least one field (name or address) must be provided",
   });
 
@@ -68,7 +67,7 @@ const migrateBody = z.object({
     .positive(),
 });
 
-// SUPER ADMIN — Monitoring query
+// SUPER ADMIN — Monitoring
 const monitoringUploadQuery = paginationQuery.extend({
   center_id: z.string().regex(/^\d+$/).optional(),
   status: z
@@ -127,7 +126,7 @@ const updateModuleBody = z
     name: z.string().min(1).max(255).optional(),
     description: z.string().max(1000).nullable().optional(),
   })
-  .refine((d) => d.name || d.description !== undefined, {
+  .refine((d) => d.name !== undefined || d.description !== undefined, {
     message: "At least one field must be provided",
   });
 
@@ -250,9 +249,12 @@ const updateReportBody = z
     score_responsibility: scoreEnum,
     score_coding_skills: scoreEnum,
   })
-  .refine((d) => Object.values(d).some((v) => v !== undefined), {
-    message: "At least one field must be provided",
-  });
+  .refine(
+    // null dianggap sebagai field yang di-provide (user sengaja clear score)
+    // undefined berarti field tidak disertakan sama sekali
+    (d) => Object.values(d).some((v) => v !== undefined),
+    { message: "At least one field must be provided" },
+  );
 
 // ============================================================
 // DRIVE — Stock
@@ -300,11 +302,10 @@ const updateThresholdBody = z.object({
 
 // ============================================================
 // MIDDLEWARE FACTORY
-// Buat middleware Express dari Zod schema.
-// target: "body" | "query" | "params"
 // ============================================================
 
 /**
+ * Buat Express middleware dari Zod schema.
  * @param {import("zod").ZodSchema} schema
  * @param {"body"|"query"|"params"} target
  */
@@ -325,7 +326,6 @@ const validate = (schema, target = "body") => {
       });
     }
 
-    // Ganti req[target] dengan data yang sudah di-parse & di-sanitize Zod
     req[target] = result.data;
     next();
   };

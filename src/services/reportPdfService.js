@@ -7,45 +7,83 @@ const logger = require("../config/logger");
 // CONSTANTS
 // ============================================================
 
-// Koordinat diukur dari pojok kiri BAWAH halaman (pdf-lib convention).
-// Page height = 842pt. Konversi dari pdfplumber (top-origin):
-//   pdf_lib_y = pageHeight - pdfplumber_top - fontSize
-//
-// Score boxes berada di kolom kanan (x ≈ 491) sejajar tiap kategori.
-// Kita tulis score di tengah box tersebut.
-
 const PAGE_HEIGHT = 842;
 const TEMPLATE_PATH = path.join(__dirname, "../assets/template_report_ptc.pdf");
 
-// Posisi field data (x, y dalam pdf-lib coords)
+// FIX (INFO): Cache template bytes sekali saat module di-load,
+// supaya tidak baca disk setiap kali generate PDF.
+// Jika template belum ada saat module di-load, throw error awal (fail-fast).
+let _cachedTemplateBytes = null;
+
+const getTemplateBytes = () => {
+  if (_cachedTemplateBytes) return _cachedTemplateBytes;
+
+  if (!fs.existsSync(TEMPLATE_PATH)) {
+    throw new Error(`PDF template not found at: ${TEMPLATE_PATH}`);
+  }
+
+  _cachedTemplateBytes = fs.readFileSync(TEMPLATE_PATH);
+  return _cachedTemplateBytes;
+};
+
+// Posisi field (x, y dalam pdf-lib coords — origin pojok kiri BAWAH)
+// Konversi dari pdfplumber (top-origin): pdf_lib_y = PAGE_HEIGHT - pdfplumber_top - fontSize
 const FIELD_POSITIONS = {
   student_name: { x: 370, y: PAGE_HEIGHT - 87.2 },
   academic_year: { x: 370, y: PAGE_HEIGHT - 102.4 },
   period: { x: 370, y: PAGE_HEIGHT - 117.0 },
   teacher_name: { x: 370, y: PAGE_HEIGHT - 131.7 },
 
-  // Score boxes — di tengah box kanan (x≈491–530, tengah ≈505)
-  score_creativity: { x: 503, y: PAGE_HEIGHT - 199.2 },
-  score_critical_thinking: { x: 503, y: PAGE_HEIGHT - 251.3 },
-  score_attention: { x: 503, y: PAGE_HEIGHT - 303.3 },
-  score_responsibility: { x: 503, y: PAGE_HEIGHT - 355.3 },
-  score_coding_skills: { x: 503, y: PAGE_HEIGHT - 407.3 },
+  // Score boxes — x center di dalam box kanan (~491–530)
+  score_creativity: { x: 495, y: PAGE_HEIGHT - 199.2 },
+  score_critical_thinking: { x: 495, y: PAGE_HEIGHT - 251.3 },
+  score_attention: { x: 495, y: PAGE_HEIGHT - 303.3 },
+  score_responsibility: { x: 495, y: PAGE_HEIGHT - 355.3 },
+  score_coding_skills: { x: 495, y: PAGE_HEIGHT - 407.3 },
 
-  // Comment — mulai dari bawah judul COMMENT
+  // Comment — mulai dari bawah label COMMENT
   comment: { x: 74.7, y: PAGE_HEIGHT - 504.0, maxWidth: 450 },
 };
 
 const FONT_SIZE_NORMAL = 9;
 const FONT_SIZE_SCORE = 9;
 const FONT_SIZE_COMMENT = 9;
-const LINE_HEIGHT = 13; // pt per baris untuk word-wrap comment
+const LINE_HEIGHT = 13; // pt antar baris untuk word-wrap
+
+// Batas bawah area comment (di atas footer "A+ = Outstanding")
+const COMMENT_BOTTOM_Y = PAGE_HEIGHT - 585;
+
+// FIX (WARNING): lebar max nama — digunakan untuk cover rectangle
+// Cover rect harus cukup lebar untuk nama terpanjang yang realistis (~30 char)
+const COVER_WIDTHS = {
+  student_name: 230,
+  academic_year: 110,
+  period: 200,
+  teacher_name: 230,
+};
 
 // ============================================================
-// HELPER: word-wrap teks menjadi array baris
+// HELPERS
 // ============================================================
 
+/**
+ * Normalize teks: ganti semua newline menjadi spasi
+ * supaya word-wrap bekerja dengan benar.
+ * FIX (BUG): tanpa ini, kata yang mengandung \n tidak di-wrap dengan benar.
+ */
+const normalizeText = (text) =>
+  text
+    .replace(/\r\n/g, " ")
+    .replace(/[\r\n]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+/**
+ * Word-wrap teks menjadi array baris dengan lebar max maxWidth pt.
+ */
 const wrapText = (text, font, fontSize, maxWidth) => {
-  const words = text.split(" ");
+  const normalized = normalizeText(text);
+  const words = normalized.split(" ");
   const lines = [];
   let currentLine = "";
 
@@ -65,6 +103,23 @@ const wrapText = (text, font, fontSize, maxWidth) => {
   return lines;
 };
 
+/**
+ * Truncate teks agar tidak melebihi maxWidth pt.
+ * Append "…" jika di-truncate.
+ */
+const truncateText = (text, font, fontSize, maxWidth) => {
+  if (font.widthOfTextAtSize(text, fontSize) <= maxWidth) return text;
+
+  let truncated = text;
+  while (
+    truncated.length > 0 &&
+    font.widthOfTextAtSize(truncated + "…", fontSize) > maxWidth
+  ) {
+    truncated = truncated.slice(0, -1);
+  }
+  return truncated + "…";
+};
+
 // ============================================================
 // MAIN: generateReportPdf
 // ============================================================
@@ -72,9 +127,9 @@ const wrapText = (text, font, fontSize, maxWidth) => {
 /**
  * Isi template PDF dengan data report dan kembalikan Buffer.
  *
- * @param {object} data
- * @param {string} data.studentName
- * @param {string} data.teacherName
+ * @param {object}      data
+ * @param {string}      data.studentName
+ * @param {string}      data.teacherName
  * @param {string|null} data.academicYear
  * @param {string|null} data.period
  * @param {string|null} data.scoreCreativity
@@ -82,7 +137,7 @@ const wrapText = (text, font, fontSize, maxWidth) => {
  * @param {string|null} data.scoreAttention
  * @param {string|null} data.scoreResponsibility
  * @param {string|null} data.scoreCodingSkills
- * @param {string} data.content  - teks komentar (min 200 kata)
+ * @param {string}      data.content  — teks komentar (min 200 kata)
  * @returns {Promise<Buffer>}
  */
 const generateReportPdf = async (data) => {
@@ -99,65 +154,53 @@ const generateReportPdf = async (data) => {
     content,
   } = data;
 
-  // Load template dari disk
-  if (!fs.existsSync(TEMPLATE_PATH)) {
-    throw new Error(`PDF template not found at: ${TEMPLATE_PATH}`);
-  }
-
-  const templateBytes = fs.readFileSync(TEMPLATE_PATH);
+  // Load template (dari cache setelah pertama kali)
+  const templateBytes = getTemplateBytes();
   const pdfDoc = await PDFDocument.load(templateBytes);
 
-  // Embed font
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
   const page = pdfDoc.getPages()[0];
   const black = rgb(0, 0, 0);
-  const blue = rgb(0.18, 0.46, 0.71); // warna score agar menonjol
+  const blue = rgb(0.18, 0.46, 0.71);
 
-  // ============================================================
-  // Helper draw teks — hapus placeholder lama lalu tulis baru
-  // ============================================================
-  const drawField = (text, pos, options = {}) => {
+  // --------------------------------------------------------
+  // Helper: cover placeholder dengan rectangle putih + tulis teks baru
+  // FIX (WARNING): width diambil dari COVER_WIDTHS agar truncate benar.
+  // --------------------------------------------------------
+  const coverAndDraw = (text, posKey) => {
     if (!text) return;
-    page.drawText(String(text), {
-      x: pos.x,
-      y: pos.y,
-      size: options.size ?? FONT_SIZE_NORMAL,
-      font: options.font ?? font,
-      color: options.color ?? black,
-    });
-  };
+    const pos = FIELD_POSITIONS[posKey];
+    const width = COVER_WIDTHS[posKey] || 160;
+    const safe = truncateText(String(text), font, FONT_SIZE_NORMAL, width - 4);
 
-  // ============================================================
-  // ISI FIELD HEADER
-  // Tulis di atas posisi placeholder yang sudah ada di template.
-  // pdf-lib overlay — teks baru ditulis di atas layer template.
-  // ============================================================
-
-  // Cover placeholder dengan kotak putih, lalu tulis nilai baru
-  const coverAndDraw = (text, pos, width = 150, height = 12) => {
-    if (!text) return;
-    // Kotak putih untuk menutupi placeholder template
     page.drawRectangle({
       x: pos.x,
       y: pos.y - 2,
       width,
-      height,
+      height: 12,
       color: rgb(1, 1, 1),
     });
-    drawField(text, pos);
+    page.drawText(safe, {
+      x: pos.x,
+      y: pos.y,
+      size: FONT_SIZE_NORMAL,
+      font,
+      color: black,
+    });
   };
 
-  coverAndDraw(studentName, FIELD_POSITIONS.student_name, 160);
-  coverAndDraw(academicYear ?? "-", FIELD_POSITIONS.academic_year, 100);
-  coverAndDraw(period ?? "-", FIELD_POSITIONS.period, 160);
-  coverAndDraw(teacherName, FIELD_POSITIONS.teacher_name, 160);
+  // --------------------------------------------------------
+  // ISI HEADER
+  // --------------------------------------------------------
+  coverAndDraw(studentName, "student_name");
+  coverAndDraw(academicYear ?? "-", "academic_year");
+  coverAndDraw(period ?? "-", "period");
+  coverAndDraw(teacherName, "teacher_name");
 
-  // ============================================================
+  // --------------------------------------------------------
   // ISI SCORE BOXES
-  // ============================================================
-
+  // --------------------------------------------------------
   const scores = [
     { key: "score_creativity", val: scoreCreativity },
     { key: "score_critical_thinking", val: scoreCriticalThinking },
@@ -170,7 +213,6 @@ const generateReportPdf = async (data) => {
     if (!val) continue;
     const pos = FIELD_POSITIONS[key];
 
-    // Kotak putih kecil untuk cover area box
     page.drawRectangle({
       x: pos.x - 4,
       y: pos.y - 2,
@@ -178,18 +220,19 @@ const generateReportPdf = async (data) => {
       height: 14,
       color: rgb(1, 1, 1),
     });
-
-    drawField(val, pos, {
+    page.drawText(String(val), {
+      x: pos.x,
+      y: pos.y,
       size: FONT_SIZE_SCORE,
       font: fontBold,
       color: blue,
     });
   }
 
-  // ============================================================
-  // ISI COMMENT (word-wrap)
-  // ============================================================
-
+  // --------------------------------------------------------
+  // ISI COMMENT (word-wrap + batas area)
+  // FIX (BUG): normalizeText sudah di-handle di dalam wrapText
+  // --------------------------------------------------------
   if (content) {
     const pos = FIELD_POSITIONS.comment;
 
@@ -206,8 +249,7 @@ const generateReportPdf = async (data) => {
     let currentY = pos.y;
 
     for (const line of lines) {
-      // Batas bawah area comment (di atas footer A+ = Outstanding)
-      if (currentY < PAGE_HEIGHT - 585) break;
+      if (currentY < COMMENT_BOTTOM_Y) break;
 
       page.drawText(line, {
         x: pos.x,
@@ -216,12 +258,10 @@ const generateReportPdf = async (data) => {
         font,
         color: black,
       });
-
       currentY -= LINE_HEIGHT;
     }
   }
 
-  // Serialize ke Buffer
   const pdfBytes = await pdfDoc.save();
   const buffer = Buffer.from(pdfBytes);
 
