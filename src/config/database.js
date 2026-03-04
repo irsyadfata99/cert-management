@@ -9,7 +9,7 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD,
   max: 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 10000,
 });
 
 // Test koneksi saat server start
@@ -24,7 +24,9 @@ pool.connect((err, client, release) => {
 
 // Event listener untuk unexpected errors pada idle client
 pool.on("error", (err) => {
-  logger.error("Unexpected database error on idle client", { error: err.message });
+  logger.error("Unexpected database error on idle client", {
+    error: err.message,
+  });
 });
 
 // Shorthand query dengan error logging
