@@ -35,16 +35,18 @@ const server = app.listen(PORT, () => {
 // Graceful shutdown
 const shutdown = (signal) => {
   logger.info(`${signal} received. Shutting down gracefully...`);
-  server.close(() => {
-    logger.info("HTTP server closed");
-    process.exit(0);
-  });
 
   // Force shutdown jika tidak selesai dalam 10 detik
-  setTimeout(() => {
+  const forceTimer = setTimeout(() => {
     logger.error("Forcing shutdown after timeout");
     process.exit(1);
   }, 10000);
+
+  server.close(() => {
+    logger.info("HTTP server closed");
+    clearTimeout(forceTimer);
+    process.exit(0);
+  });
 };
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));

@@ -37,8 +37,109 @@ const validateMimeType = (file, allowedTypes, res) => {
 };
 
 // ============================================================
+// STOCK ROUTER — admin & super_admin
+// Di-mount LEBIH DULU agar tidak terblokir oleh teacherRouter
+// di bawah yang menggunakan authorize("teacher")
+// ============================================================
+
+const stockRouter = express.Router();
+stockRouter.use(authorize("admin", "super_admin"));
+stockRouter.use(apiLimiter);
+
+// GET /api/drive/stock
+stockRouter.get("/", async (req, res, next) => {
+  try {
+    if (req.user.role === "super_admin") {
+      const data = await stockService.getAllStock();
+      return res.status(200).json({ success: true, data });
+    }
+
+    const data = await stockService.getStockByCenter(req.user.center_id);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ success: false, message: err.message });
+    next(err);
+  }
+});
+
+// POST /api/drive/stock/add
+stockRouter.post("/add", async (req, res, next) => {
+  try {
+    const { center_id, type, quantity } = req.body;
+    const centerId = req.user.role === "super_admin" ? center_id : req.user.center_id;
+
+    if (!centerId || !type || !quantity) {
+      return res.status(400).json({ success: false, message: "center_id, type, and quantity are required" });
+    }
+
+    const data = await stockService.addStock({
+      centerId,
+      type,
+      quantity: parseInt(quantity),
+      addedBy: req.user.id,
+    });
+
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ success: false, message: err.message });
+    next(err);
+  }
+});
+
+// POST /api/drive/stock/transfer — super_admin only
+stockRouter.post("/transfer", authorize("super_admin"), async (req, res, next) => {
+  try {
+    const { type, from_center_id, to_center_id, quantity } = req.body;
+
+    if (!type || !from_center_id || !to_center_id || !quantity) {
+      return res.status(400).json({
+        success: false,
+        message: "type, from_center_id, to_center_id, and quantity are required",
+      });
+    }
+
+    const data = await stockService.transferStock({
+      type,
+      fromCenterId: parseInt(from_center_id),
+      toCenterId: parseInt(to_center_id),
+      quantity: parseInt(quantity),
+      transferredBy: req.user.id,
+    });
+
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ success: false, message: err.message });
+    next(err);
+  }
+});
+
+// PATCH /api/drive/stock/threshold
+stockRouter.patch("/threshold", async (req, res, next) => {
+  try {
+    const { center_id, type, threshold } = req.body;
+    const centerId = req.user.role === "super_admin" ? center_id : req.user.center_id;
+
+    if (!centerId || !type || threshold === undefined) {
+      return res.status(400).json({ success: false, message: "center_id, type, and threshold are required" });
+    }
+
+    const data = await stockService.updateThreshold({
+      centerId,
+      type,
+      threshold: parseInt(threshold),
+      updatedBy: req.user.id,
+    });
+
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ success: false, message: err.message });
+    next(err);
+  }
+});
+
+// ============================================================
 // TEACHER ROUTER — upload scan & report
-// Mounted at /api/drive
+// Di-mount SETELAH stockRouter agar /stock tidak terblokir
 // ============================================================
 
 const teacherRouter = express.Router();
@@ -210,113 +311,15 @@ teacherRouter.post("/reports/:reportId/upload", upload.single("file"), async (re
 });
 
 // ============================================================
-// STOCK ROUTER — admin & super_admin
-// Mounted at /api/drive/stock
-// ============================================================
-
-const stockRouter = express.Router();
-stockRouter.use(authorize("admin", "super_admin"));
-stockRouter.use(apiLimiter);
-
-// GET /api/drive/stock
-stockRouter.get("/", async (req, res, next) => {
-  try {
-    if (req.user.role === "super_admin") {
-      const data = await stockService.getAllStock();
-      return res.status(200).json({ success: true, data });
-    }
-
-    const data = await stockService.getStockByCenter(req.user.center_id);
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    if (err.status) return res.status(err.status).json({ success: false, message: err.message });
-    next(err);
-  }
-});
-
-// POST /api/drive/stock/add
-stockRouter.post("/add", async (req, res, next) => {
-  try {
-    const { center_id, type, quantity } = req.body;
-    const centerId = req.user.role === "super_admin" ? center_id : req.user.center_id;
-
-    if (!centerId || !type || !quantity) {
-      return res.status(400).json({ success: false, message: "center_id, type, and quantity are required" });
-    }
-
-    const data = await stockService.addStock({
-      centerId,
-      type,
-      quantity: parseInt(quantity),
-      addedBy: req.user.id,
-    });
-
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    if (err.status) return res.status(err.status).json({ success: false, message: err.message });
-    next(err);
-  }
-});
-
-// POST /api/drive/stock/transfer — super_admin only
-stockRouter.post("/transfer", authorize("super_admin"), async (req, res, next) => {
-  try {
-    const { type, from_center_id, to_center_id, quantity } = req.body;
-
-    if (!type || !from_center_id || !to_center_id || !quantity) {
-      return res.status(400).json({
-        success: false,
-        message: "type, from_center_id, to_center_id, and quantity are required",
-      });
-    }
-
-    const data = await stockService.transferStock({
-      type,
-      fromCenterId: parseInt(from_center_id),
-      toCenterId: parseInt(to_center_id),
-      quantity: parseInt(quantity),
-      transferredBy: req.user.id,
-    });
-
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    if (err.status) return res.status(err.status).json({ success: false, message: err.message });
-    next(err);
-  }
-});
-
-// PATCH /api/drive/stock/threshold
-stockRouter.patch("/threshold", async (req, res, next) => {
-  try {
-    const { center_id, type, threshold } = req.body;
-    const centerId = req.user.role === "super_admin" ? center_id : req.user.center_id;
-
-    if (!centerId || !type || threshold === undefined) {
-      return res.status(400).json({ success: false, message: "center_id, type, and threshold are required" });
-    }
-
-    const data = await stockService.updateThreshold({
-      centerId,
-      type,
-      threshold: parseInt(threshold),
-      updatedBy: req.user.id,
-    });
-
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    if (err.status) return res.status(err.status).json({ success: false, message: err.message });
-    next(err);
-  }
-});
-
-// ============================================================
-// MAIN ROUTER — gabungkan teacherRouter & stockRouter
-// Tidak ada middleware di level ini agar masing-masing router
-// bisa punya authorize sendiri tanpa konflik
+// MAIN ROUTER
+// PENTING: stockRouter di-mount SEBELUM teacherRouter.
+// router.use("/", ...) akan match semua path termasuk /stock,
+// sehingga jika teacherRouter di-mount lebih dulu, authorize("teacher")
+// akan memblokir admin sebelum request mencapai stockRouter.
 // ============================================================
 
 const router = express.Router();
-router.use("/", teacherRouter);
-router.use("/stock", stockRouter);
+router.use("/stock", stockRouter); // spesifik dulu
+router.use("/", teacherRouter); // umum belakangan
 
 module.exports = router;

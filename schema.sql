@@ -342,26 +342,32 @@ $$ LANGUAGE plpgsql;
 -- TRIGGERS
 -- ============================================================
 
+DROP TRIGGER IF EXISTS trg_centers_updated_at ON centers;
 CREATE TRIGGER trg_centers_updated_at
   BEFORE UPDATE ON centers
   FOR EACH ROW EXECUTE FUNCTION fn_update_updated_at();
 
+DROP TRIGGER IF EXISTS trg_users_updated_at ON users;
 CREATE TRIGGER trg_users_updated_at
   BEFORE UPDATE ON users
   FOR EACH ROW EXECUTE FUNCTION fn_update_updated_at();
 
+DROP TRIGGER IF EXISTS trg_modules_updated_at ON modules;
 CREATE TRIGGER trg_modules_updated_at
   BEFORE UPDATE ON modules
   FOR EACH ROW EXECUTE FUNCTION fn_update_updated_at();
 
+DROP TRIGGER IF EXISTS trg_students_updated_at ON students;
 CREATE TRIGGER trg_students_updated_at
   BEFORE UPDATE ON students
   FOR EACH ROW EXECUTE FUNCTION fn_update_updated_at();
 
+DROP TRIGGER IF EXISTS trg_enrollments_updated_at ON enrollments;
 CREATE TRIGGER trg_enrollments_updated_at
   BEFORE UPDATE ON enrollments
   FOR EACH ROW EXECUTE FUNCTION fn_update_updated_at();
 
+DROP TRIGGER IF EXISTS trg_reports_updated_at ON reports;
 CREATE TRIGGER trg_reports_updated_at
   BEFORE UPDATE ON reports
   FOR EACH ROW EXECUTE FUNCTION fn_update_updated_at();
@@ -377,6 +383,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_certificates_unique_id ON certificates;
 CREATE TRIGGER trg_certificates_unique_id
   BEFORE INSERT ON certificates
   FOR EACH ROW EXECUTE FUNCTION fn_set_cert_unique_id();
@@ -392,6 +399,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_medals_unique_id ON medals;
 CREATE TRIGGER trg_medals_unique_id
   BEFORE INSERT ON medals
   FOR EACH ROW EXECUTE FUNCTION fn_set_medal_unique_id();
@@ -410,6 +418,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_reports_link_to_prints ON reports;
 CREATE TRIGGER trg_reports_link_to_prints
   AFTER INSERT ON reports
   FOR EACH ROW EXECUTE FUNCTION fn_link_report_to_prints();
@@ -493,22 +502,47 @@ WHERE e.is_active = TRUE
   AND u.is_active = TRUE;
 
 CREATE OR REPLACE VIEW vw_monthly_center_activity AS
+-- Hitung cert dan medal secara terpisah di subquery untuk menghindari
+-- cross join yang menghasilkan kombinasi duplikat jika enrollment
+-- memiliki keduanya di bulan yang sama.
+WITH cert_monthly AS (
+  SELECT
+    center_id,
+    DATE_TRUNC('month', printed_at) AS month,
+    COUNT(*) FILTER (WHERE is_reprint = FALSE)           AS cert_printed,
+    COUNT(*) FILTER (WHERE is_reprint = TRUE)            AS cert_reprinted,
+    COUNT(*) FILTER (WHERE scan_file_id IS NOT NULL)     AS cert_scan_uploaded
+  FROM certificates
+  GROUP BY center_id, DATE_TRUNC('month', printed_at)
+),
+medal_monthly AS (
+  SELECT
+    center_id,
+    DATE_TRUNC('month', printed_at) AS month,
+    COUNT(*) AS medal_printed
+  FROM medals
+  GROUP BY center_id, DATE_TRUNC('month', printed_at)
+),
+all_months AS (
+  SELECT center_id, month FROM cert_monthly
+  UNION
+  SELECT center_id, month FROM medal_monthly
+)
 SELECT
-  c.id                                                             AS center_id,
-  c.name                                                           AS center_name,
-  DATE_TRUNC('month', COALESCE(cert.printed_at, med.printed_at))  AS month,
-  COUNT(DISTINCT cert.id) FILTER (WHERE cert.is_reprint = FALSE)  AS cert_printed,
-  COUNT(DISTINCT cert.id) FILTER (WHERE cert.is_reprint = TRUE)   AS cert_reprinted,
-  COUNT(DISTINCT cert.id) FILTER (WHERE cert.scan_file_id IS NOT NULL) AS cert_scan_uploaded,
-  COUNT(DISTINCT med.id)                                           AS medal_printed,
-  COUNT(DISTINCT cert.id) + COUNT(DISTINCT med.id)                AS total_issued
-FROM centers c
-LEFT JOIN certificates cert ON cert.center_id = c.id
-LEFT JOIN medals       med  ON med.center_id  = c.id
+  c.id                                          AS center_id,
+  c.name                                        AS center_name,
+  am.month,
+  COALESCE(cm.cert_printed, 0)                  AS cert_printed,
+  COALESCE(cm.cert_reprinted, 0)                AS cert_reprinted,
+  COALESCE(cm.cert_scan_uploaded, 0)            AS cert_scan_uploaded,
+  COALESCE(mm.medal_printed, 0)                 AS medal_printed,
+  COALESCE(cm.cert_printed, 0) + COALESCE(mm.medal_printed, 0) AS total_issued
+FROM all_months am
+JOIN centers c ON c.id = am.center_id
+LEFT JOIN cert_monthly  cm ON cm.center_id = am.center_id AND cm.month = am.month
+LEFT JOIN medal_monthly mm ON mm.center_id = am.center_id AND mm.month = am.month
 WHERE c.is_active = TRUE
-GROUP BY c.id, c.name,
-         DATE_TRUNC('month', COALESCE(cert.printed_at, med.printed_at))
-ORDER BY month DESC, c.name;
+ORDER BY am.month DESC, c.name;
 
 CREATE OR REPLACE VIEW vw_stock_alerts AS
 SELECT

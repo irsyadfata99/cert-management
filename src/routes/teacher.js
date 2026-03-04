@@ -2,6 +2,7 @@ const express = require("express");
 const { authorize } = require("../middleware/authorize");
 const { apiLimiter, printLimiter } = require("../middleware/rateLimiter");
 const { parsePagination, paginateResponse } = require("../helpers/paginate");
+const { buildSet } = require("../helpers/queryBuilder");
 const { validateWordCount } = require("../helpers/wordCount");
 const certificateService = require("../services/certificateService");
 const medalService = require("../services/medalService");
@@ -426,59 +427,33 @@ router.patch("/reports/:id", async (req, res, next) => {
       wordCount = wordCountResult.count;
     }
 
-    const fields = [];
-    const values = [];
-    let idx = 1;
+    // Kumpulkan hanya field yang di-update (undefined = tidak diubah)
+    const dirtyFields = {
+      content,
+      word_count: wordCount,
+      academic_year,
+      period,
+      score_creativity,
+      score_critical_thinking,
+      score_attention,
+      score_responsibility,
+      score_coding_skills,
+    };
 
-    if (content !== undefined) {
-      fields.push(`content = $${idx++}`);
-      values.push(content);
-    }
-    if (wordCount !== undefined) {
-      fields.push(`word_count = $${idx++}`);
-      values.push(wordCount);
-    }
-    if (academic_year !== undefined) {
-      fields.push(`academic_year = $${idx++}`);
-      values.push(academic_year);
-    }
-    if (period !== undefined) {
-      fields.push(`period = $${idx++}`);
-      values.push(period);
-    }
-    if (score_creativity !== undefined) {
-      fields.push(`score_creativity = $${idx++}`);
-      values.push(score_creativity);
-    }
-    if (score_critical_thinking !== undefined) {
-      fields.push(`score_critical_thinking = $${idx++}`);
-      values.push(score_critical_thinking);
-    }
-    if (score_attention !== undefined) {
-      fields.push(`score_attention = $${idx++}`);
-      values.push(score_attention);
-    }
-    if (score_responsibility !== undefined) {
-      fields.push(`score_responsibility = $${idx++}`);
-      values.push(score_responsibility);
-    }
-    if (score_coding_skills !== undefined) {
-      fields.push(`score_coding_skills = $${idx++}`);
-      values.push(score_coding_skills);
-    }
+    // Hapus semua key yang undefined agar buildSet tidak memprosesnya
+    Object.keys(dirtyFields).forEach((k) => dirtyFields[k] === undefined && delete dirtyFields[k]);
 
-    if (fields.length === 0) {
+    if (Object.keys(dirtyFields).length === 0) {
       return res.status(400).json({ success: false, message: "No fields to update" });
     }
 
-    fields.push("updated_at = NOW()");
-    values.push(req.params.id);
+    const { setClause, values, nextIndex } = buildSet(dirtyFields);
 
     const result = await query(
-      `UPDATE reports SET ${fields.join(", ")}
-       WHERE id = $${idx}
+      `UPDATE reports ${setClause}
+       WHERE id = $${nextIndex}
        RETURNING id, enrollment_id, academic_year, period, word_count, updated_at`,
-      values,
+      [...values, req.params.id],
     );
 
     logger.info("Report updated", { reportId: req.params.id, teacherId });

@@ -211,7 +211,7 @@ const reprint = async ({ originalCertId, teacherId, centerId, ptcDate }) => {
  * @param {boolean|undefined} options.isReprint
  * @returns {{ rows, total }}
  */
-const getByTeacher = async ({ teacherId, centerId, page, limit, offset, isReprint }) => {
+const getByTeacher = async ({ teacherId, centerId, limit, offset, isReprint }) => {
   const conditions = ["c.teacher_id = $1", "c.center_id = $2"];
   const values = [teacherId, centerId];
   let idx = 3;

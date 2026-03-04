@@ -84,12 +84,7 @@ passport.use(
           if (user.role === "teacher" && !driveFolderId) {
             try {
               // Ambil drive_folder_id center milik teacher
-              const centerResult = await query(
-                `SELECT drive_folder_id FROM centers WHERE id = (
-                   SELECT center_id FROM users WHERE id = $1
-                 )`,
-                [user.id],
-              );
+              const centerResult = await query(`SELECT drive_folder_id FROM centers WHERE id = $1 AND is_active = TRUE`, [user.center_id]);
 
               const centerFolderId = centerResult.rows[0]?.drive_folder_id;
 
