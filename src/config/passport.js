@@ -8,12 +8,13 @@ const logger = require("./logger");
 // SERIALIZE / DESERIALIZE
 // ============================================================
 
-// Simpan hanya user ID ke session
 passport.serializeUser((user, done) => {
   done(null, user.id);
 });
 
-// Ambil full user dari DB setiap request
+// Ambil full user dari DB — hanya dipanggil jika session.cachedUser kosong.
+// Setelah berhasil, simpan ke session.cachedUser agar request berikutnya
+// tidak perlu query DB (lihat middleware di app.js).
 passport.deserializeUser(async (id, done) => {
   try {
     const result = await query(
@@ -28,7 +29,6 @@ passport.deserializeUser(async (id, done) => {
 
     const user = result.rows[0];
 
-    // Blokir user yang di-nonaktifkan setelah login
     if (!user.is_active) {
       return done(null, false);
     }
@@ -50,26 +50,29 @@ passport.use(
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       callbackURL: process.env.GOOGLE_CALLBACK_URL,
+      passReqToCallback: true,
     },
-    async (accessToken, refreshToken, profile, done) => {
+    async (req, accessToken, refreshToken, profile, done) => {
       try {
         const email = profile.emails?.[0]?.value;
 
         if (!email) {
-          return done(null, false, { message: "No email found in Google profile" });
+          return done(null, false, {
+            message: "No email found in Google profile",
+          });
         }
 
-        // Cari user berdasarkan email (pre-registered oleh admin)
         const existing = await query(
           `SELECT id, email, name, avatar, role, center_id, drive_folder_id, is_active, google_id
            FROM users WHERE email = $1`,
           [email],
         );
 
-        // Email tidak terdaftar — tolak login
         if (existing.rows.length === 0) {
           logger.warn("Login attempt from unregistered email", { email });
-          return done(null, false, { message: "Email not registered. Please contact your admin." });
+          return done(null, false, {
+            message: "Email not registered. Please contact your admin.",
+          });
         }
 
         const user = existing.rows[0];
@@ -80,11 +83,12 @@ passport.use(
         if (!user.is_active) {
           let driveFolderId = user.drive_folder_id;
 
-          // Auto-create folder Drive untuk teacher saat pertama login
           if (user.role === "teacher" && !driveFolderId) {
             try {
-              // Ambil drive_folder_id center milik teacher
-              const centerResult = await query(`SELECT drive_folder_id FROM centers WHERE id = $1 AND is_active = TRUE`, [user.center_id]);
+              const centerResult = await query(
+                `SELECT drive_folder_id FROM centers WHERE id = $1 AND is_active = TRUE`,
+                [user.center_id],
+              );
 
               const centerFolderId = centerResult.rows[0]?.drive_folder_id;
 
@@ -94,14 +98,16 @@ passport.use(
                   email,
                 });
               } else {
-                driveFolderId = await driveService.createFolder(profile.displayName, centerFolderId);
+                driveFolderId = await driveService.createFolder(
+                  profile.displayName,
+                  centerFolderId,
+                );
                 logger.info("Drive folder created for teacher", {
                   userId: user.id,
                   folderId: driveFolderId,
                 });
               }
             } catch (driveErr) {
-              // Drive error tidak menghentikan proses login
               logger.error("Failed to create Drive folder for teacher", {
                 userId: user.id,
                 error: driveErr.message,
@@ -109,7 +115,6 @@ passport.use(
             }
           }
 
-          // Aktifkan akun & simpan google_id, avatar, drive_folder_id
           await query(
             `UPDATE users
              SET google_id        = $1,
@@ -118,18 +123,32 @@ passport.use(
                  is_active        = TRUE,
                  updated_at       = NOW()
              WHERE id = $4`,
-            [profile.id, profile.photos?.[0]?.value ?? null, driveFolderId, user.id],
+            [
+              profile.id,
+              profile.photos?.[0]?.value ?? null,
+              driveFolderId,
+              user.id,
+            ],
           );
 
-          logger.info("User account activated on first login", { userId: user.id, email, role: user.role });
+          logger.info("User account activated on first login", {
+            userId: user.id,
+            email,
+            role: user.role,
+          });
 
-          return done(null, {
+          const activatedUser = {
             ...user,
             google_id: profile.id,
             avatar: profile.photos?.[0]?.value ?? null,
             drive_folder_id: driveFolderId,
             is_active: true,
-          });
+          };
+
+          // Simpan ke session cache
+          if (req.session) req.session.cachedUser = activatedUser;
+
+          return done(null, activatedUser);
         }
 
         // ============================================================
@@ -147,7 +166,12 @@ passport.use(
           );
         }
 
-        done(null, { ...user, avatar: newAvatar });
+        const finalUser = { ...user, avatar: newAvatar };
+
+        // Simpan ke session cache
+        if (req.session) req.session.cachedUser = finalUser;
+
+        done(null, finalUser);
       } catch (err) {
         logger.error("Google OAuth strategy error", { error: err.message });
         done(err, null);

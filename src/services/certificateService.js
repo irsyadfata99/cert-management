@@ -2,22 +2,30 @@ const { query, withTransaction } = require("../config/database");
 const logger = require("../config/logger");
 
 // ============================================================
+// HELPERS
+// ============================================================
+
+/**
+ * Normalize error dari DB function agar pesan internal tidak bocor ke client.
+ */
+const normalizeDbError = (err) => {
+  if (err.message?.includes("Stock sertifikat tidak mencukupi")) {
+    const normalized = new Error("Insufficient certificate stock");
+    normalized.status = 400;
+    return normalized;
+  }
+  return err;
+};
+
+// ============================================================
 // PRINT CERTIFICATE
 // ============================================================
 
 /**
  * Print sertifikat satuan.
- * Flow: validasi enrollment → kurangi stock → insert certificate
- * @param {object} options
- * @param {number} options.enrollmentId
- * @param {number} options.teacherId
- * @param {number} options.centerId
- * @param {string} options.ptcDate - format YYYY-MM-DD
- * @returns {object} certificate row
  */
 const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
   return withTransaction(async (client) => {
-    // Validasi enrollment aktif dan milik teacher & center yang benar
     const enrollment = await client.query(
       `SELECT id FROM enrollments
        WHERE id = $1 AND teacher_id = $2 AND center_id = $3 AND is_active = TRUE`,
@@ -30,7 +38,6 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
       throw err;
     }
 
-    // Cek apakah sudah pernah print (bukan reprint)
     const existingCert = await client.query(
       `SELECT id FROM certificates
        WHERE enrollment_id = $1 AND is_reprint = FALSE`,
@@ -38,15 +45,21 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
     );
 
     if (existingCert.rows.length > 0) {
-      const err = new Error("Certificate already printed for this enrollment. Use reprint instead.");
+      const err = new Error(
+        "Certificate already printed for this enrollment. Use reprint instead.",
+      );
       err.status = 409;
       throw err;
     }
 
-    // Kurangi stock
-    await client.query(`SELECT fn_decrement_certificate_stock($1, 1)`, [centerId]);
+    try {
+      await client.query(`SELECT fn_decrement_certificate_stock($1, 1)`, [
+        centerId,
+      ]);
+    } catch (err) {
+      throw normalizeDbError(err);
+    }
 
-    // Insert certificate
     const result = await client.query(
       `INSERT INTO certificates (enrollment_id, teacher_id, center_id, ptc_date, is_reprint)
        VALUES ($1, $2, $3, $4, FALSE)
@@ -67,12 +80,7 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
 };
 
 /**
- * Print sertifikat batch (banyak enrollment sekaligus).
- * @param {object} options
- * @param {Array<{enrollmentId, ptcDate}>} options.items
- * @param {number} options.teacherId
- * @param {number} options.centerId
- * @returns {Array} array certificate rows
+ * Print sertifikat batch — menggunakan bulk INSERT.
  */
 const printBatch = async ({ items, teacherId, centerId }) => {
   if (!items?.length) {
@@ -92,12 +100,14 @@ const printBatch = async ({ items, teacherId, centerId }) => {
     );
 
     if (enrollmentCheck.rows.length !== enrollmentIds.length) {
-      const err = new Error("One or more enrollments not found or not assigned to you");
+      const err = new Error(
+        "One or more enrollments not found or not assigned to you",
+      );
       err.status = 404;
       throw err;
     }
 
-    // Cek duplikat — enrollment yang sudah pernah di-print
+    // Cek duplikat
     const alreadyPrinted = await client.query(
       `SELECT enrollment_id FROM certificates
        WHERE enrollment_id = ANY($1) AND is_reprint = FALSE`,
@@ -106,29 +116,55 @@ const printBatch = async ({ items, teacherId, centerId }) => {
 
     if (alreadyPrinted.rows.length > 0) {
       const ids = alreadyPrinted.rows.map((r) => r.enrollment_id);
-      const err = new Error(`Certificates already printed for enrollment IDs: ${ids.join(", ")}`);
+      const err = new Error(
+        `Certificates already printed for enrollment IDs: ${ids.join(", ")}`,
+      );
       err.status = 409;
       throw err;
     }
 
-    // Kurangi stock sekaligus (batch)
-    await client.query(`SELECT fn_decrement_certificate_stock($1, $2)`, [centerId, items.length]);
+    // Kurangi stock sekaligus
+    try {
+      await client.query(`SELECT fn_decrement_certificate_stock($1, $2)`, [
+        centerId,
+        items.length,
+      ]);
+    } catch (err) {
+      throw normalizeDbError(err);
+    }
 
     // Generate batch_id
-    const batchIdResult = await client.query(`SELECT gen_random_uuid() AS batch_id`);
+    const batchIdResult = await client.query(
+      `SELECT gen_random_uuid() AS batch_id`,
+    );
     const batchId = batchIdResult.rows[0].batch_id;
 
-    // Insert semua certificate
-    const certs = [];
-    for (const item of items) {
-      const result = await client.query(
-        `INSERT INTO certificates (enrollment_id, teacher_id, center_id, ptc_date, is_reprint, batch_id)
-         VALUES ($1, $2, $3, $4, FALSE, $5)
-         RETURNING id, cert_unique_id, enrollment_id, teacher_id, center_id, ptc_date, is_reprint, batch_id, printed_at`,
-        [item.enrollmentId, teacherId, centerId, item.ptcDate, batchId],
-      );
-      certs.push(result.rows[0]);
-    }
+    // --------------------------------------------------------
+    // BULK INSERT — satu query untuk semua item
+    // --------------------------------------------------------
+    const valuePlaceholders = items
+      .map(
+        (_, i) =>
+          `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, FALSE, $${i * 5 + 5})`,
+      )
+      .join(", ");
+
+    const flatValues = items.flatMap((item) => [
+      item.enrollmentId,
+      teacherId,
+      centerId,
+      item.ptcDate,
+      batchId,
+    ]);
+
+    const result = await client.query(
+      `INSERT INTO certificates (enrollment_id, teacher_id, center_id, ptc_date, is_reprint, batch_id)
+       VALUES ${valuePlaceholders}
+       RETURNING id, cert_unique_id, enrollment_id, teacher_id, center_id, ptc_date, is_reprint, batch_id, printed_at`,
+      flatValues,
+    );
+
+    const certs = result.rows;
 
     logger.info("Batch certificate printed", {
       batchId,
@@ -145,18 +181,8 @@ const printBatch = async ({ items, teacherId, centerId }) => {
 // REPRINT
 // ============================================================
 
-/**
- * Reprint sertifikat — menghasilkan cert_unique_id baru.
- * @param {object} options
- * @param {number} options.originalCertId - ID certificate asli
- * @param {number} options.teacherId
- * @param {number} options.centerId
- * @param {string} options.ptcDate
- * @returns {object} certificate reprint row
- */
 const reprint = async ({ originalCertId, teacherId, centerId, ptcDate }) => {
   return withTransaction(async (client) => {
-    // Validasi certificate asli
     const original = await client.query(
       `SELECT c.id, c.enrollment_id, c.is_reprint
        FROM certificates c
@@ -166,17 +192,23 @@ const reprint = async ({ originalCertId, teacherId, centerId, ptcDate }) => {
     );
 
     if (original.rows.length === 0) {
-      const err = new Error("Original certificate not found or not assigned to you");
+      const err = new Error(
+        "Original certificate not found or not assigned to you",
+      );
       err.status = 404;
       throw err;
     }
 
     const { enrollment_id: enrollmentId } = original.rows[0];
 
-    // Kurangi stock
-    await client.query(`SELECT fn_decrement_certificate_stock($1, 1)`, [centerId]);
+    try {
+      await client.query(`SELECT fn_decrement_certificate_stock($1, 1)`, [
+        centerId,
+      ]);
+    } catch (err) {
+      throw normalizeDbError(err);
+    }
 
-    // Insert reprint dengan referensi ke original
     const result = await client.query(
       `INSERT INTO certificates (enrollment_id, teacher_id, center_id, ptc_date, is_reprint, original_cert_id)
        VALUES ($1, $2, $3, $4, TRUE, $5)
@@ -200,18 +232,13 @@ const reprint = async ({ originalCertId, teacherId, centerId, ptcDate }) => {
 // QUERIES
 // ============================================================
 
-/**
- * Ambil daftar certificate milik teacher.
- * @param {object} options
- * @param {number} options.teacherId
- * @param {number} options.centerId
- * @param {number} options.page
- * @param {number} options.limit
- * @param {number} options.offset
- * @param {boolean|undefined} options.isReprint
- * @returns {{ rows, total }}
- */
-const getByTeacher = async ({ teacherId, centerId, limit, offset, isReprint }) => {
+const getByTeacher = async ({
+  teacherId,
+  centerId,
+  limit,
+  offset,
+  isReprint,
+}) => {
   const conditions = ["c.teacher_id = $1", "c.center_id = $2"];
   const values = [teacherId, centerId];
   let idx = 3;
@@ -238,7 +265,10 @@ const getByTeacher = async ({ teacherId, centerId, limit, offset, isReprint }) =
        LIMIT $${idx} OFFSET $${idx + 1}`,
       [...values, limit, offset],
     ),
-    query(`SELECT COUNT(*)::int AS total FROM certificates c ${whereClause}`, values),
+    query(
+      `SELECT COUNT(*)::int AS total FROM certificates c ${whereClause}`,
+      values,
+    ),
   ]);
 
   return { rows: dataResult.rows, total: countResult.rows[0].total };

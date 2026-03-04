@@ -3,24 +3,66 @@ const { Readable } = require("stream");
 const logger = require("../config/logger");
 
 // ============================================================
+// RETRY HELPER — exponential backoff
+// ============================================================
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Jalankan fn dengan retry + exponential backoff.
+ * Hanya retry untuk error yang bersifat transient (429, 5xx).
+ *
+ * @param {Function} fn        - Async function yang akan dijalankan
+ * @param {number}   retries   - Maksimal jumlah retry (default: 3)
+ * @param {number}   baseDelay - Delay awal dalam ms (default: 500)
+ * @returns {Promise<any>}
+ */
+const withRetry = async (fn, retries = 3, baseDelay = 500) => {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const isLast = attempt === retries;
+      const statusCode = err.code ?? err.status ?? err.response?.status;
+      const isRetryable =
+        statusCode === 429 || (statusCode >= 500 && statusCode < 600);
+
+      if (isLast || !isRetryable) {
+        throw err;
+      }
+
+      const delay = baseDelay * 2 ** attempt; // 500, 1000, 2000 ms
+      logger.warn("Drive API error, retrying...", {
+        attempt: attempt + 1,
+        retries,
+        statusCode,
+        error: err.message,
+        delayMs: delay,
+      });
+
+      await sleep(delay);
+    }
+  }
+};
+
+// ============================================================
 // FOLDER OPERATIONS
 // ============================================================
 
 /**
  * Buat folder baru di Google Drive.
- * @param {string} name - Nama folder
- * @param {string} parentFolderId - ID folder parent
- * @returns {string} ID folder yang baru dibuat
  */
 const createFolder = async (name, parentFolderId) => {
-  const response = await drive.files.create({
-    requestBody: {
-      name,
-      mimeType: "application/vnd.google-apps.folder",
-      parents: [parentFolderId],
-    },
-    fields: "id",
-  });
+  const response = await withRetry(() =>
+    drive.files.create({
+      requestBody: {
+        name,
+        mimeType: "application/vnd.google-apps.folder",
+        parents: [parentFolderId],
+      },
+      fields: "id",
+    }),
+  );
 
   const folderId = response.data.id;
   logger.info("Drive folder created", { name, parentFolderId, folderId });
@@ -33,26 +75,23 @@ const createFolder = async (name, parentFolderId) => {
 
 /**
  * Upload file ke Google Drive.
- * @param {object} options
- * @param {Buffer|string} options.buffer - Konten file
- * @param {string} options.fileName - Nama file di Drive
- * @param {string} options.mimeType - MIME type file
- * @param {string} options.folderId - ID folder tujuan
- * @returns {{ fileId: string, fileName: string, webViewLink: string }}
  */
 const uploadFile = async ({ buffer, fileName, mimeType, folderId }) => {
-  const readable = Readable.from(buffer);
+  const response = await withRetry(() => {
+    // Buat Readable baru di setiap attempt agar stream tidak habis
+    const readable = Readable.from(buffer);
 
-  const response = await drive.files.create({
-    requestBody: {
-      name: fileName,
-      parents: [folderId],
-    },
-    media: {
-      mimeType,
-      body: readable,
-    },
-    fields: "id, name, webViewLink",
+    return drive.files.create({
+      requestBody: {
+        name: fileName,
+        parents: [folderId],
+      },
+      media: {
+        mimeType,
+        body: readable,
+      },
+      fields: "id, name, webViewLink",
+    });
   });
 
   const { id: fileId, name, webViewLink } = response.data;
@@ -64,23 +103,22 @@ const uploadFile = async ({ buffer, fileName, mimeType, folderId }) => {
 
 /**
  * Hapus file dari Google Drive.
- * @param {string} fileId
  */
 const deleteFile = async (fileId) => {
-  await drive.files.delete({ fileId });
+  await withRetry(() => drive.files.delete({ fileId }));
   logger.info("Drive file deleted", { fileId });
 };
 
 /**
  * Ambil metadata file dari Google Drive.
- * @param {string} fileId
- * @returns {{ fileId, fileName, mimeType, size, webViewLink }}
  */
 const getFileMetadata = async (fileId) => {
-  const response = await drive.files.get({
-    fileId,
-    fields: "id, name, mimeType, size, webViewLink",
-  });
+  const response = await withRetry(() =>
+    drive.files.get({
+      fileId,
+      fields: "id, name, mimeType, size, webViewLink",
+    }),
+  );
 
   const { id, name, mimeType, size, webViewLink } = response.data;
   return { fileId: id, fileName: name, mimeType, size, webViewLink };
@@ -90,23 +128,10 @@ const getFileMetadata = async (fileId) => {
 // CENTER FOLDER
 // ============================================================
 
-/**
- * Buat folder center di root Drive folder.
- * Dipanggil oleh super_admin saat membuat center baru.
- * @param {string} centerName
- * @returns {string} ID folder center
- */
 const createCenterFolder = async (centerName) => {
   return createFolder(centerName, process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID);
 };
 
-/**
- * Buat folder teacher di dalam folder center.
- * Dipanggil otomatis saat teacher pertama kali login.
- * @param {string} teacherName
- * @param {string} centerFolderId
- * @returns {string} ID folder teacher
- */
 const createTeacherFolder = async (teacherName, centerFolderId) => {
   return createFolder(teacherName, centerFolderId);
 };

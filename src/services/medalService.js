@@ -2,21 +2,30 @@ const { query, withTransaction } = require("../config/database");
 const logger = require("../config/logger");
 
 // ============================================================
+// HELPERS
+// ============================================================
+
+/**
+ * Normalize error dari DB function agar pesan internal tidak bocor ke client.
+ */
+const normalizeDbError = (err) => {
+  if (err.message?.includes("Stock medali tidak mencukupi")) {
+    const normalized = new Error("Insufficient medal stock");
+    normalized.status = 400;
+    return normalized;
+  }
+  return err;
+};
+
+// ============================================================
 // PRINT MEDAL
 // ============================================================
 
 /**
  * Print medali satuan.
- * @param {object} options
- * @param {number} options.enrollmentId
- * @param {number} options.teacherId
- * @param {number} options.centerId
- * @param {string} options.ptcDate - format YYYY-MM-DD
- * @returns {object} medal row
  */
 const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
   return withTransaction(async (client) => {
-    // Validasi enrollment
     const enrollment = await client.query(
       `SELECT id FROM enrollments
        WHERE id = $1 AND teacher_id = $2 AND center_id = $3 AND is_active = TRUE`,
@@ -29,8 +38,10 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
       throw err;
     }
 
-    // Cek apakah sudah pernah print medal
-    const existing = await client.query(`SELECT id FROM medals WHERE enrollment_id = $1`, [enrollmentId]);
+    const existing = await client.query(
+      `SELECT id FROM medals WHERE enrollment_id = $1`,
+      [enrollmentId],
+    );
 
     if (existing.rows.length > 0) {
       const err = new Error("Medal already printed for this enrollment");
@@ -38,10 +49,12 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
       throw err;
     }
 
-    // Kurangi stock
-    await client.query(`SELECT fn_decrement_medal_stock($1, 1)`, [centerId]);
+    try {
+      await client.query(`SELECT fn_decrement_medal_stock($1, 1)`, [centerId]);
+    } catch (err) {
+      throw normalizeDbError(err);
+    }
 
-    // Insert medal
     const result = await client.query(
       `INSERT INTO medals (enrollment_id, teacher_id, center_id, ptc_date)
        VALUES ($1, $2, $3, $4)
@@ -62,12 +75,7 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
 };
 
 /**
- * Print medali batch.
- * @param {object} options
- * @param {Array<{enrollmentId, ptcDate}>} options.items
- * @param {number} options.teacherId
- * @param {number} options.centerId
- * @returns {{ batchId, medals }}
+ * Print medali batch — menggunakan bulk INSERT.
  */
 const printBatch = async ({ items, teacherId, centerId }) => {
   if (!items?.length) {
@@ -87,39 +95,70 @@ const printBatch = async ({ items, teacherId, centerId }) => {
     );
 
     if (enrollmentCheck.rows.length !== enrollmentIds.length) {
-      const err = new Error("One or more enrollments not found or not assigned to you");
+      const err = new Error(
+        "One or more enrollments not found or not assigned to you",
+      );
       err.status = 404;
       throw err;
     }
 
     // Cek duplikat
-    const alreadyPrinted = await client.query(`SELECT enrollment_id FROM medals WHERE enrollment_id = ANY($1)`, [enrollmentIds]);
+    const alreadyPrinted = await client.query(
+      `SELECT enrollment_id FROM medals WHERE enrollment_id = ANY($1)`,
+      [enrollmentIds],
+    );
 
     if (alreadyPrinted.rows.length > 0) {
       const ids = alreadyPrinted.rows.map((r) => r.enrollment_id);
-      const err = new Error(`Medals already printed for enrollment IDs: ${ids.join(", ")}`);
+      const err = new Error(
+        `Medals already printed for enrollment IDs: ${ids.join(", ")}`,
+      );
       err.status = 409;
       throw err;
     }
 
     // Kurangi stock sekaligus
-    await client.query(`SELECT fn_decrement_medal_stock($1, $2)`, [centerId, items.length]);
+    try {
+      await client.query(`SELECT fn_decrement_medal_stock($1, $2)`, [
+        centerId,
+        items.length,
+      ]);
+    } catch (err) {
+      throw normalizeDbError(err);
+    }
 
     // Generate batch_id
-    const batchIdResult = await client.query(`SELECT gen_random_uuid() AS batch_id`);
+    const batchIdResult = await client.query(
+      `SELECT gen_random_uuid() AS batch_id`,
+    );
     const batchId = batchIdResult.rows[0].batch_id;
 
-    // Insert semua medal
-    const medals = [];
-    for (const item of items) {
-      const result = await client.query(
-        `INSERT INTO medals (enrollment_id, teacher_id, center_id, ptc_date, batch_id)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, medal_unique_id, enrollment_id, teacher_id, center_id, ptc_date, batch_id, printed_at`,
-        [item.enrollmentId, teacherId, centerId, item.ptcDate, batchId],
-      );
-      medals.push(result.rows[0]);
-    }
+    // --------------------------------------------------------
+    // BULK INSERT — satu query untuk semua item
+    // --------------------------------------------------------
+    const valuePlaceholders = items
+      .map(
+        (_, i) =>
+          `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, $${i * 5 + 5})`,
+      )
+      .join(", ");
+
+    const flatValues = items.flatMap((item) => [
+      item.enrollmentId,
+      teacherId,
+      centerId,
+      item.ptcDate,
+      batchId,
+    ]);
+
+    const result = await client.query(
+      `INSERT INTO medals (enrollment_id, teacher_id, center_id, ptc_date, batch_id)
+       VALUES ${valuePlaceholders}
+       RETURNING id, medal_unique_id, enrollment_id, teacher_id, center_id, ptc_date, batch_id, printed_at`,
+      flatValues,
+    );
+
+    const medals = result.rows;
 
     logger.info("Batch medal printed", {
       batchId,
@@ -136,15 +175,6 @@ const printBatch = async ({ items, teacherId, centerId }) => {
 // QUERIES
 // ============================================================
 
-/**
- * Ambil daftar medal milik teacher.
- * @param {object} options
- * @param {number} options.teacherId
- * @param {number} options.centerId
- * @param {number} options.limit
- * @param {number} options.offset
- * @returns {{ rows, total }}
- */
 const getByTeacher = async ({ teacherId, centerId, limit, offset }) => {
   const [dataResult, countResult] = await Promise.all([
     query(

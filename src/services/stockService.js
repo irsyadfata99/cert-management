@@ -2,14 +2,63 @@ const { query } = require("../config/database");
 const logger = require("../config/logger");
 
 // ============================================================
-// GET STOCK
+// HELPERS
 // ============================================================
 
 /**
- * Ambil stock certificate & medal untuk satu center.
- * @param {number} centerId
- * @returns {object}
+ * Normalize error dari DB function fn_transfer_stock agar
+ * pesan internal (bahasa Indonesia) tidak bocor ke client.
  */
+const normalizeTransferError = (err) => {
+  const msg = err.message ?? "";
+
+  if (msg.includes("Stock tidak mencukupi")) {
+    const normalized = new Error("Insufficient stock in source center");
+    normalized.status = 400;
+    return normalized;
+  }
+
+  if (msg.includes("Center tujuan") && msg.includes("tidak ditemukan")) {
+    const normalized = new Error("Destination center not found");
+    normalized.status = 404;
+    return normalized;
+  }
+
+  if (msg.includes("Center asal") && msg.includes("tidak ditemukan")) {
+    const normalized = new Error("Source center not found");
+    normalized.status = 404;
+    return normalized;
+  }
+
+  if (msg.includes("Tipe tidak valid")) {
+    const normalized = new Error(
+      "Invalid stock type. Use: certificate or medal",
+    );
+    normalized.status = 400;
+    return normalized;
+  }
+
+  if (msg.includes("Quantity harus lebih dari 0")) {
+    const normalized = new Error("Quantity must be greater than 0");
+    normalized.status = 400;
+    return normalized;
+  }
+
+  if (msg.includes("Center asal dan tujuan tidak boleh sama")) {
+    const normalized = new Error(
+      "Source and destination centers must be different",
+    );
+    normalized.status = 400;
+    return normalized;
+  }
+
+  return err;
+};
+
+// ============================================================
+// GET STOCK
+// ============================================================
+
 const getStockByCenter = async (centerId) => {
   const result = await query(
     `SELECT
@@ -34,12 +83,10 @@ const getStockByCenter = async (centerId) => {
   return result.rows[0];
 };
 
-/**
- * Ambil stock semua center (untuk super_admin).
- * @returns {Array}
- */
 const getAllStock = async () => {
-  const result = await query(`SELECT * FROM vw_stock_alerts ORDER BY center_name`);
+  const result = await query(
+    `SELECT * FROM vw_stock_alerts ORDER BY center_name`,
+  );
   return result.rows;
 };
 
@@ -47,15 +94,6 @@ const getAllStock = async () => {
 // ADD STOCK
 // ============================================================
 
-/**
- * Tambah stock (top-up) untuk center tertentu.
- * @param {object} options
- * @param {number} options.centerId
- * @param {"certificate"|"medal"} options.type
- * @param {number} options.quantity
- * @param {number} options.addedBy - user ID yang melakukan top-up
- * @returns {object} stock terbaru
- */
 const addStock = async ({ centerId, type, quantity, addedBy }) => {
   if (!["certificate", "medal"].includes(type)) {
     const err = new Error("Invalid stock type. Use: certificate or medal");
@@ -100,15 +138,6 @@ const addStock = async ({ centerId, type, quantity, addedBy }) => {
 // UPDATE THRESHOLD
 // ============================================================
 
-/**
- * Update low stock threshold untuk center tertentu.
- * @param {object} options
- * @param {number} options.centerId
- * @param {"certificate"|"medal"} options.type
- * @param {number} options.threshold
- * @param {number} options.updatedBy
- * @returns {object}
- */
 const updateThreshold = async ({ centerId, type, threshold, updatedBy }) => {
   if (!["certificate", "medal"].includes(type)) {
     const err = new Error("Invalid stock type. Use: certificate or medal");
@@ -138,7 +167,12 @@ const updateThreshold = async ({ centerId, type, threshold, updatedBy }) => {
     throw err;
   }
 
-  logger.info("Stock threshold updated", { centerId, type, threshold, updatedBy });
+  logger.info("Stock threshold updated", {
+    centerId,
+    type,
+    threshold,
+    updatedBy,
+  });
 
   return {
     center_id: centerId,
@@ -152,17 +186,13 @@ const updateThreshold = async ({ centerId, type, threshold, updatedBy }) => {
 // TRANSFER STOCK
 // ============================================================
 
-/**
- * Transfer stock antar center menggunakan DB function.
- * @param {object} options
- * @param {"certificate"|"medal"} options.type
- * @param {number} options.fromCenterId
- * @param {number} options.toCenterId
- * @param {number} options.quantity
- * @param {number} options.transferredBy
- * @returns {object}
- */
-const transferStock = async ({ type, fromCenterId, toCenterId, quantity, transferredBy }) => {
+const transferStock = async ({
+  type,
+  fromCenterId,
+  toCenterId,
+  quantity,
+  transferredBy,
+}) => {
   if (!["certificate", "medal"].includes(type)) {
     const err = new Error("Invalid stock type. Use: certificate or medal");
     err.status = 400;
@@ -182,18 +212,17 @@ const transferStock = async ({ type, fromCenterId, toCenterId, quantity, transfe
   }
 
   try {
-    const result = await query(`SELECT fn_transfer_stock($1, $2, $3, $4) AS result`, [type, fromCenterId, toCenterId, quantity]);
+    const result = await query(
+      `SELECT fn_transfer_stock($1, $2, $3, $4) AS result`,
+      [type, fromCenterId, toCenterId, quantity],
+    );
 
     const transferResult = result.rows[0].result;
     logger.info("Stock transferred", { ...transferResult, transferredBy });
 
     return transferResult;
   } catch (err) {
-    // DB function melempar exception jika stock tidak cukup
-    if (err.message?.includes("Stock tidak mencukupi")) {
-      err.status = 400;
-    }
-    throw err;
+    throw normalizeTransferError(err);
   }
 };
 

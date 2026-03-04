@@ -18,13 +18,12 @@ app.use(helmet());
 app.use(
   cors({
     origin: process.env.CLIENT_URL,
-    credentials: true, // wajib untuk session cookie lintas origin
+    credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
 
-// Trust proxy — wajib jika di belakang nginx/reverse proxy di production
 if (process.env.NODE_ENV === "production") {
   app.set("trust proxy", 1);
 }
@@ -36,13 +35,11 @@ if (process.env.NODE_ENV === "production") {
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// HTTP request logging via morgan → diarahkan ke winston
 app.use(
   morgan("combined", {
     stream: {
       write: (message) => logger.http(message.trim()),
     },
-    // Skip health check dari log agar tidak berisik
     skip: (req) => req.url === "/health",
   }),
 );
@@ -55,8 +52,22 @@ app.use(sessionConfig);
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Passport strategy dimuat setelah passport diinisialisasi
 require("./config/passport");
+
+// ============================================================
+// CACHED USER MIDDLEWARE
+// Jika session sudah punya cachedUser, skip query DB.
+// deserializeUser tetap berjalan normal untuk first-load,
+// lalu hasilnya disimpan ke session.cachedUser.
+// Untuk invalidasi (misal role berubah), set req.session.cachedUser = null.
+// ============================================================
+
+app.use((req, res, next) => {
+  if (req.isAuthenticated() && req.session?.cachedUser) {
+    req.user = req.session.cachedUser;
+  }
+  next();
+});
 
 // ============================================================
 // HEALTH CHECK
