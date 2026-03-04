@@ -7,7 +7,7 @@ const {
   buildSet,
   buildOrderBy,
 } = require("../helpers/queryBuilder");
-const { query } = require("../config/database");
+const { query, withTransaction } = require("../config/database"); // [FIX 2] tambah withTransaction
 const {
   validate,
   createStudentBody,
@@ -21,6 +21,7 @@ const {
   listEnrollmentsQuery,
   idParam,
   paginationQuery,
+  migrateBody, // [FIX 2] tambah migrateBody
 } = require("../validators");
 const logger = require("../config/logger");
 
@@ -236,12 +237,10 @@ router.patch(
       );
 
       if (result.rows.length === 0) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message: "Student not found or already inactive",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Student not found or already inactive",
+        });
       }
 
       logger.info("Student deactivated", {
@@ -249,12 +248,10 @@ router.patch(
         deactivatedBy: req.user.id,
       });
 
-      res
-        .status(200)
-        .json({
-          success: true,
-          message: `Student "${result.rows[0].name}" deactivated`,
-        });
+      res.status(200).json({
+        success: true,
+        message: `Student "${result.rows[0].name}" deactivated`,
+      });
     } catch (err) {
       next(err);
     }
@@ -401,12 +398,10 @@ router.patch(
       );
 
       if (result.rows.length === 0) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message: "Module not found or already inactive",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Module not found or already inactive",
+        });
       }
 
       logger.info("Module deactivated", {
@@ -414,12 +409,10 @@ router.patch(
         deactivatedBy: req.user.id,
       });
 
-      res
-        .status(200)
-        .json({
-          success: true,
-          message: `Module "${result.rows[0].name}" deactivated`,
-        });
+      res.status(200).json({
+        success: true,
+        message: `Module "${result.rows[0].name}" deactivated`,
+      });
     } catch (err) {
       next(err);
     }
@@ -566,12 +559,10 @@ router.patch(
       );
 
       if (result.rows.length === 0) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message: "Teacher not found or already inactive",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Teacher not found or already inactive",
+        });
       }
 
       logger.info("Teacher deactivated", {
@@ -579,12 +570,10 @@ router.patch(
         deactivatedBy: req.user.id,
       });
 
-      res
-        .status(200)
-        .json({
-          success: true,
-          message: `Teacher "${result.rows[0].name}" deactivated`,
-        });
+      res.status(200).json({
+        success: true,
+        message: `Teacher "${result.rows[0].name}" deactivated`,
+      });
     } catch (err) {
       next(err);
     }
@@ -721,12 +710,10 @@ router.post(
       res.status(201).json({ success: true, data: result.rows[0] });
     } catch (err) {
       if (err.code === "23505") {
-        return res
-          .status(409)
-          .json({
-            success: false,
-            message: "Student already has an active enrollment",
-          });
+        return res.status(409).json({
+          success: false,
+          message: "Student already has an active enrollment",
+        });
       }
       next(err);
     }
@@ -750,12 +737,10 @@ router.patch(
       );
 
       if (result.rows.length === 0) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message: "Enrollment not found or already inactive",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Enrollment not found or already inactive",
+        });
       }
 
       logger.info("Enrollment deactivated", {
@@ -771,5 +756,174 @@ router.patch(
     }
   },
 );
+
+// ============================================================
+// [FIX 1] PAIR STATUS
+// Cek kelengkapan pair: scan certificate + final report di Drive
+// ============================================================
+
+// GET /api/admin/enrollments/:id/pair-status
+router.get(
+  "/enrollments/:id/pair-status",
+  validate(idParam, "params"),
+  async (req, res, next) => {
+    try {
+      const centerId = resolveCenterId(req, null);
+
+      const result = await query(
+        `SELECT
+           e.id                                          AS enrollment_id,
+           s.name                                        AS student_name,
+           m.name                                        AS module_name,
+           cert.id                                       AS cert_id,
+           cert.cert_unique_id,
+           cert.scan_file_id,
+           cert.scan_uploaded_at,
+           r.id                                          AS report_id,
+           r.drive_file_id,
+           r.drive_uploaded_at,
+           (cert.scan_file_id IS NOT NULL)               AS scan_complete,
+           (r.drive_file_id   IS NOT NULL)               AS report_complete,
+           (cert.scan_file_id IS NOT NULL AND
+            r.drive_file_id   IS NOT NULL)               AS pair_complete
+         FROM enrollments e
+         JOIN students s ON s.id = e.student_id
+         JOIN modules  m ON m.id = e.module_id
+         LEFT JOIN LATERAL (
+           SELECT id, cert_unique_id, scan_file_id, scan_uploaded_at
+           FROM certificates
+           WHERE enrollment_id = e.id AND is_reprint = FALSE
+           ORDER BY printed_at DESC LIMIT 1
+         ) cert ON TRUE
+         LEFT JOIN reports r ON r.enrollment_id = e.id
+         WHERE e.id = $1 ${centerId ? "AND e.center_id = $2" : ""}`,
+        centerId ? [req.params.id, centerId] : [req.params.id],
+      );
+
+      if (result.rows.length === 0) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Enrollment not found" });
+      }
+
+      const data = result.rows[0];
+
+      const missing = [];
+      if (!data.scan_complete) missing.push("certificate scan");
+      if (!data.report_complete) missing.push("final report on Drive");
+
+      res.status(200).json({
+        success: true,
+        data: { ...data, missing_items: missing },
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ============================================================
+// [FIX 2] MIGRATE — dipindah dari superAdmin ke admin route
+// Admin hanya bisa migrate enrollment dari centernya sendiri.
+// Super admin bisa migrate enrollment dari center manapun.
+// ============================================================
+
+// POST /api/admin/migrate
+router.post("/migrate", validate(migrateBody), async (req, res, next) => {
+  try {
+    const { enrollment_id, to_center_id } = req.body;
+    const centerId = resolveCenterId(req, null);
+
+    // Validasi enrollment ada & milik center admin ini
+    const enrollmentResult = await query(
+      `SELECT e.id, e.center_id AS from_center_id,
+              s.name AS student_name, c.name AS from_center_name
+       FROM enrollments e
+       JOIN students s ON s.id = e.student_id
+       JOIN centers c  ON c.id = e.center_id
+       WHERE e.id = $1 ${centerId ? "AND e.center_id = $2" : ""}`,
+      centerId ? [enrollment_id, centerId] : [enrollment_id],
+    );
+
+    if (enrollmentResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Enrollment not found or does not belong to your center",
+      });
+    }
+
+    const enrollment = enrollmentResult.rows[0];
+
+    if (enrollment.from_center_id === to_center_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Enrollment is already in the target center",
+      });
+    }
+
+    // Validasi center tujuan aktif
+    const toCenterResult = await query(
+      `SELECT id, name FROM centers WHERE id = $1 AND is_active = TRUE`,
+      [to_center_id],
+    );
+
+    if (toCenterResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Target center not found or inactive",
+      });
+    }
+
+    const toCenter = toCenterResult.rows[0];
+
+    const result = await withTransaction(async (client) => {
+      await client.query(
+        `UPDATE enrollments SET center_id = $1, updated_at = NOW() WHERE id = $2`,
+        [to_center_id, enrollment_id],
+      );
+
+      const certResult = await client.query(
+        `UPDATE certificates SET center_id = $1 WHERE enrollment_id = $2 RETURNING id`,
+        [to_center_id, enrollment_id],
+      );
+
+      const medalResult = await client.query(
+        `UPDATE medals SET center_id = $1 WHERE enrollment_id = $2 RETURNING id`,
+        [to_center_id, enrollment_id],
+      );
+
+      return {
+        certificates_migrated: certResult.rowCount,
+        medals_migrated: medalResult.rowCount,
+      };
+    });
+
+    logger.info("Enrollment migrated by admin", {
+      enrollmentId: enrollment_id,
+      studentName: enrollment.student_name,
+      fromCenterId: enrollment.from_center_id,
+      fromCenterName: enrollment.from_center_name,
+      toCenterId: to_center_id,
+      toCenterName: toCenter.name,
+      migratedBy: req.user.id,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        enrollment_id,
+        student_name: enrollment.student_name,
+        from_center_id: enrollment.from_center_id,
+        from_center_name: enrollment.from_center_name,
+        to_center_id,
+        to_center_name: toCenter.name,
+        certificates_migrated: result.certificates_migrated,
+        medals_migrated: result.medals_migrated,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 module.exports = router;

@@ -8,19 +8,18 @@ const {
   buildOrderBy,
 } = require("../helpers/queryBuilder");
 const { createCenterFolder } = require("../services/driveService");
-const { query, withTransaction } = require("../config/database");
+const { query } = require("../config/database"); // [FIX 2] withTransaction dihapus karena migrate sudah pindah ke admin
 const {
   validate,
   createCenterBody,
   updateCenterBody,
   createAdminBody,
-  migrateBody,
   monitoringUploadQuery,
   monitoringActivityQuery,
   downloadEnrollmentsQuery,
   idParam,
   paginationQuery,
-} = require("../validators");
+} = require("../validators"); // [FIX 2] migrateBody dihapus dari import
 const logger = require("../config/logger");
 
 const router = express.Router();
@@ -103,12 +102,10 @@ router.post("/centers", validate(createCenterBody), async (req, res, next) => {
         name,
         error: driveErr.message,
       });
-      return res
-        .status(502)
-        .json({
-          success: false,
-          message: "Failed to create Drive folder. Please try again.",
-        });
+      return res.status(502).json({
+        success: false,
+        message: "Failed to create Drive folder. Please try again.",
+      });
     }
 
     const result = await query(
@@ -162,12 +159,10 @@ router.patch(
       );
 
       if (result.rows.length === 0) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message: "Center not found or already inactive",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Center not found or already inactive",
+        });
       }
 
       logger.info("Center updated", {
@@ -196,12 +191,10 @@ router.patch(
       );
 
       if (result.rows.length === 0) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message: "Center not found or already inactive",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Center not found or already inactive",
+        });
       }
 
       logger.info("Center deactivated", {
@@ -209,12 +202,10 @@ router.patch(
         deactivatedBy: req.user.id,
       });
 
-      res
-        .status(200)
-        .json({
-          success: true,
-          message: `Center "${result.rows[0].name}" deactivated`,
-        });
+      res.status(200).json({
+        success: true,
+        message: `Center "${result.rows[0].name}" deactivated`,
+      });
     } catch (err) {
       next(err);
     }
@@ -346,12 +337,10 @@ router.patch(
       );
 
       if (result.rows.length === 0) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message: "Admin not found or already inactive",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Admin not found or already inactive",
+        });
       }
 
       logger.info("Admin deactivated", {
@@ -359,126 +348,15 @@ router.patch(
         deactivatedBy: req.user.id,
       });
 
-      res
-        .status(200)
-        .json({
-          success: true,
-          message: `Admin "${result.rows[0].name}" deactivated`,
-        });
+      res.status(200).json({
+        success: true,
+        message: `Admin "${result.rows[0].name}" deactivated`,
+      });
     } catch (err) {
       next(err);
     }
   },
 );
-
-// ============================================================
-// MIGRATE CERTIFICATES & MEDALS
-// Pindahkan enrollment + certificates + medals ke center lain.
-// Stock tidak di-adjust otomatis (pemindahan data historis).
-// ============================================================
-
-// POST /api/super-admin/migrate
-router.post("/migrate", validate(migrateBody), async (req, res, next) => {
-  try {
-    const { enrollment_id, to_center_id } = req.body;
-
-    // Validasi enrollment ada
-    const enrollmentResult = await query(
-      `SELECT e.id, e.center_id AS from_center_id,
-              s.name AS student_name, c.name AS from_center_name
-       FROM enrollments e
-       JOIN students s ON s.id = e.student_id
-       JOIN centers c  ON c.id = e.center_id
-       WHERE e.id = $1`,
-      [enrollment_id],
-    );
-
-    if (enrollmentResult.rows.length === 0) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Enrollment not found" });
-    }
-
-    const enrollment = enrollmentResult.rows[0];
-
-    if (enrollment.from_center_id === to_center_id) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Enrollment is already in the target center",
-        });
-    }
-
-    // Validasi center tujuan aktif
-    const toCenterResult = await query(
-      `SELECT id, name FROM centers WHERE id = $1 AND is_active = TRUE`,
-      [to_center_id],
-    );
-
-    if (toCenterResult.rows.length === 0) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: "Target center not found or inactive",
-        });
-    }
-
-    const toCenter = toCenterResult.rows[0];
-
-    // Migrate dalam satu transaksi
-    const result = await withTransaction(async (client) => {
-      await client.query(
-        `UPDATE enrollments SET center_id = $1, updated_at = NOW() WHERE id = $2`,
-        [to_center_id, enrollment_id],
-      );
-
-      const certResult = await client.query(
-        `UPDATE certificates SET center_id = $1 WHERE enrollment_id = $2 RETURNING id`,
-        [to_center_id, enrollment_id],
-      );
-
-      const medalResult = await client.query(
-        `UPDATE medals SET center_id = $1 WHERE enrollment_id = $2 RETURNING id`,
-        [to_center_id, enrollment_id],
-      );
-
-      return {
-        certificates_migrated: certResult.rowCount,
-        medals_migrated: medalResult.rowCount,
-      };
-    });
-
-    logger.info("Enrollment migrated", {
-      enrollmentId: enrollment_id,
-      studentName: enrollment.student_name,
-      fromCenterId: enrollment.from_center_id,
-      fromCenterName: enrollment.from_center_name,
-      toCenterId: to_center_id,
-      toCenterName: toCenter.name,
-      certificatesMigrated: result.certificates_migrated,
-      medalsMigrated: result.medals_migrated,
-      migratedBy: req.user.id,
-    });
-
-    res.status(200).json({
-      success: true,
-      data: {
-        enrollment_id,
-        student_name: enrollment.student_name,
-        from_center_id: enrollment.from_center_id,
-        from_center_name: enrollment.from_center_name,
-        to_center_id,
-        to_center_name: toCenter.name,
-        certificates_migrated: result.certificates_migrated,
-        medals_migrated: result.medals_migrated,
-      },
-    });
-  } catch (err) {
-    next(err);
-  }
-});
 
 // ============================================================
 // MONITORING
