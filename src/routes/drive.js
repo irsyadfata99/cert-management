@@ -8,7 +8,6 @@ const {
   addStockBody,
   transferStockBody,
   updateThresholdBody,
-  idParam,
 } = require("../validators");
 const driveService = require("../services/driveService");
 const stockService = require("../services/stockService");
@@ -29,7 +28,10 @@ const upload = multer({
   fileFilter: (_req, _file, cb) => cb(null, true),
 });
 
-// FIX (WARNING): idParam untuk reportId params
+const certIdParam = z.object({
+  certId: z.string().regex(/^\d+$/, "certId must be a number"),
+});
+
 const reportIdParam = z.object({
   reportId: z.string().regex(/^\d+$/, "reportId must be a number"),
 });
@@ -177,13 +179,12 @@ teacherRouter.use(authorize("teacher"));
 teacherRouter.use(uploadLimiter);
 
 // POST /api/drive/certificates/:certId/scan
-// FIX (BUG): validate menggunakan idParam langsung, bukan ternary yang tidak berguna
+// Scan bisa di-replace (upload ulang scan yang lebih baik).
+// [BUG FIX] Ganti ternary validate yang selalu evaluasi ke left side
+// (idParam.extend adalah fungsi, selalu truthy) dengan schema yang benar.
 teacherRouter.post(
   "/certificates/:certId/scan",
-  validate(
-    idParam.extend ? z.object({ certId: z.string().regex(/^\d+$/) }) : idParam,
-    "params",
-  ),
+  validate(certIdParam, "params"),
   upload.single("file"),
   async (req, res, next) => {
     try {
@@ -208,27 +209,22 @@ teacherRouter.post(
       );
 
       if (certResult.rows.length === 0) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message: "Certificate not found or not assigned to you",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Certificate not found or not assigned to you",
+        });
       }
 
       const cert = certResult.rows[0];
 
       if (!cert.drive_folder_id) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message:
-              "Your Drive folder is not set up yet. Please contact admin.",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Your Drive folder is not set up yet. Please contact admin.",
+        });
       }
 
-      // Hapus file lama jika ada (replace scan)
+      // Hapus file lama jika ada (replace scan diperbolehkan)
       if (cert.scan_file_id) {
         try {
           await driveService.deleteFile(cert.scan_file_id);
@@ -251,7 +247,9 @@ teacherRouter.post(
       });
 
       await query(
-        `UPDATE certificates SET scan_file_id = $1, scan_file_name = $2, scan_uploaded_at = NOW() WHERE id = $3`,
+        `UPDATE certificates
+         SET scan_file_id = $1, scan_file_name = $2, scan_uploaded_at = NOW()
+         WHERE id = $3`,
         [fileId, uploadedName, certId],
       );
 
@@ -262,16 +260,14 @@ teacherRouter.post(
         teacherId,
       });
 
-      res
-        .status(200)
-        .json({
-          success: true,
-          data: {
-            cert_id: certId,
-            scan_file_id: fileId,
-            scan_file_name: uploadedName,
-          },
-        });
+      res.status(200).json({
+        success: true,
+        data: {
+          cert_id: certId,
+          scan_file_id: fileId,
+          scan_file_name: uploadedName,
+        },
+      });
     } catch (err) {
       next(err);
     }
@@ -279,9 +275,13 @@ teacherRouter.post(
 );
 
 // POST /api/drive/reports/:reportId/upload
-// Manual upload/override — digunakan jika auto-upload sebelumnya gagal.
-// Jika report sudah punya drive_file_id, file lama akan diganti.
-// FIX (WARNING): tambah validate reportIdParam
+// Manual upload — digunakan sebagai fallback jika auto-upload di POST /reports gagal
+// (drive_file_id IS NULL). Jika report sudah ter-upload (drive_file_id IS NOT NULL),
+// request ditolak untuk menjaga konsistensi dengan PATCH /api/teacher/reports/:id
+// yang juga memblokir edit setelah report ter-upload.
+//
+// [BUG FIX] Versi sebelumnya menghapus file lama dan langsung upload ulang tanpa
+// pengecekan, sehingga report yang sudah final bisa di-replace secara tidak sengaja.
 teacherRouter.post(
   "/reports/:reportId/upload",
   validate(reportIdParam, "params"),
@@ -310,36 +310,28 @@ teacherRouter.post(
       );
 
       if (reportResult.rows.length === 0) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message: "Report not found or not assigned to you",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Report not found or not assigned to you",
+        });
       }
 
       const report = reportResult.rows[0];
 
-      if (!driveFolderId) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message:
-              "Your Drive folder is not set up yet. Please contact admin.",
-          });
+      // [BUG FIX] Tolak jika sudah ter-upload — konsisten dengan PATCH /reports/:id.
+      // Endpoint ini hanya untuk fallback/retry upload yang sebelumnya gagal.
+      if (report.drive_file_id) {
+        return res.status(400).json({
+          success: false,
+          message: "Report already uploaded to Drive and cannot be replaced",
+        });
       }
 
-      // Hapus file lama jika ada
-      if (report.drive_file_id) {
-        try {
-          await driveService.deleteFile(report.drive_file_id);
-        } catch (deleteErr) {
-          logger.warn("Failed to delete old report file", {
-            fileId: report.drive_file_id,
-            error: deleteErr.message,
-          });
-        }
+      if (!driveFolderId) {
+        return res.status(400).json({
+          success: false,
+          message: "Your Drive folder is not set up yet. Please contact admin.",
+        });
       }
 
       const today = new Date().toISOString().split("T")[0];
@@ -354,7 +346,9 @@ teacherRouter.post(
       });
 
       await query(
-        `UPDATE reports SET drive_file_id = $1, drive_file_name = $2, drive_uploaded_at = NOW(), updated_at = NOW() WHERE id = $3`,
+        `UPDATE reports
+         SET drive_file_id = $1, drive_file_name = $2, drive_uploaded_at = NOW(), updated_at = NOW()
+         WHERE id = $3`,
         [fileId, uploadedName, reportId],
       );
 
@@ -365,16 +359,14 @@ teacherRouter.post(
         teacherId,
       });
 
-      res
-        .status(200)
-        .json({
-          success: true,
-          data: {
-            report_id: reportId,
-            drive_file_id: fileId,
-            drive_file_name: uploadedName,
-          },
-        });
+      res.status(200).json({
+        success: true,
+        data: {
+          report_id: reportId,
+          drive_file_id: fileId,
+          drive_file_name: uploadedName,
+        },
+      });
     } catch (err) {
       next(err);
     }

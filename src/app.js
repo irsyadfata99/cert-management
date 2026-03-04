@@ -56,16 +56,36 @@ require("./config/passport");
 
 // ============================================================
 // CACHED USER MIDDLEWARE
-// Jika session sudah punya cachedUser, skip query DB.
-// deserializeUser tetap berjalan normal untuk first-load,
-// lalu hasilnya disimpan ke session.cachedUser.
-// Untuk invalidasi (misal role berubah), set req.session.cachedUser = null.
+//
+// Tujuan: menghindari query DB di setiap request melalui deserializeUser.
+//
+// Skenario A — session.cachedUser sudah ada:
+//   Gunakan langsung. Terjadi pada request ke-2 dst setelah login,
+//   atau setelah OAuth callback (passport.js sudah set cachedUser).
+//
+// Skenario B — session.cachedUser kosong tapi req.user sudah di-set:
+//   Terjadi saat server restart / session lama dari cookie masih valid.
+//   deserializeUser sudah query DB dan populate req.user.
+//   → Write-back ke session.cachedUser agar request berikutnya skip DB.
+//
+// [BUG FIX] Versi sebelumnya hanya handle skenario A (read cache).
+// Skenario B tidak pernah di-write → cache tidak pernah efektif setelah
+// server restart → setiap request terus query DB via deserializeUser.
+//
+// Invalidasi: set req.session.cachedUser = null (misal setelah role update).
 // ============================================================
 
 app.use((req, res, next) => {
-  if (req.isAuthenticated() && req.session?.cachedUser) {
+  if (!req.isAuthenticated()) return next();
+
+  if (req.session?.cachedUser) {
+    // Skenario A: gunakan cache
     req.user = req.session.cachedUser;
+  } else if (req.user) {
+    // Skenario B: write-back hasil deserializeUser ke cache
+    req.session.cachedUser = req.user;
   }
+
   next();
 });
 

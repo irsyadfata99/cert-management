@@ -300,7 +300,6 @@ router.get("/medals", async (req, res, next) => {
 // ============================================================
 
 // GET /api/teacher/reports
-// FIX (WARNING): tambah score_* ke SELECT agar teacher bisa lihat scores yang sudah diisi
 router.get("/reports", async (req, res, next) => {
   try {
     const { teacherId } = teacherContext(req);
@@ -347,12 +346,12 @@ router.get("/reports", async (req, res, next) => {
 
 // POST /api/teacher/reports
 // Validation order:
-//   1. enrollment exists & assigned to teacher
-//   2. cert scan uploaded
-//   3. report not already exists   ← FIX: dipindah ke sini agar 409 didahulukan dari 400
-//   4. word count >= 200
-//   5. insert DB
-//   6. generate PDF + auto-upload Drive
+//   1. Enrollment exists & assigned to teacher
+//   2. Certificate scan sudah di-upload
+//   3. Report belum ada (409 didahulukan dari 400)
+//   4. Word count >= 200
+//   5. Insert DB
+//   6. Generate PDF + auto-upload Drive
 router.post("/reports", validate(createReportBody), async (req, res, next) => {
   try {
     const { teacherId, centerId, driveFolderId, teacherName } =
@@ -379,12 +378,10 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
     );
 
     if (enrollment.rows.length === 0) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: "Enrollment not found or not assigned to you",
-        });
+      return res.status(404).json({
+        success: false,
+        message: "Enrollment not found or not assigned to you",
+      });
     }
 
     const { student_name: studentName } = enrollment.rows[0];
@@ -402,7 +399,7 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
       });
     }
 
-    // 3. FIX: Cek report sudah ada — SEBELUM word count agar 409 > 400
+    // 3. Cek report sudah ada — SEBELUM word count agar 409 > 400
     const existingReport = await query(
       `SELECT id FROM reports WHERE enrollment_id = $1`,
       [enrollment_id],
@@ -604,7 +601,7 @@ router.patch(
         wordCount = wordCountResult.count;
       }
 
-      // FIX: Kumpulkan dirty fields, pastikan ada setidaknya satu
+      // Kumpulkan dirty fields — undefined = tidak dikirim (skip), null = sengaja clear
       const dirtyFields = {
         content,
         word_count: wordCount,
@@ -617,20 +614,15 @@ router.patch(
         score_coding_skills,
       };
 
-      // Hapus undefined (field tidak dikirim), tapi pertahankan null (user sengaja clear)
       Object.keys(dirtyFields).forEach((k) => {
         if (dirtyFields[k] === undefined) delete dirtyFields[k];
       });
 
-      // FIX (BUG): guard jika tidak ada field yang berubah (seharusnya sudah dicegah Zod refine,
-      // tapi double-check di sini untuk keamanan)
       if (Object.keys(dirtyFields).length === 0) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "At least one field must be provided",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "At least one field must be provided",
+        });
       }
 
       const { setClause, values, nextIndex } = buildSet(dirtyFields);
@@ -661,20 +653,38 @@ router.patch(
       }
 
       try {
+        // [BUG FIX] Gunakan !== undefined (bukan ??) untuk score agar null yang
+        // disengaja (user clear score) tidak jatuh ke nilai existing.
+        // Operator ?? akan skip null dan ambil existing — ini SALAH untuk kasus clear.
         const finalData = {
           studentName: existingData.student_name,
           teacherName,
-          academicYear: academic_year ?? existingData.academic_year,
-          period: period ?? existingData.period,
-          scoreCreativity: score_creativity ?? existingData.score_creativity,
+          academicYear:
+            academic_year !== undefined
+              ? academic_year
+              : existingData.academic_year,
+          period: period !== undefined ? period : existingData.period,
+          scoreCreativity:
+            score_creativity !== undefined
+              ? score_creativity
+              : existingData.score_creativity,
           scoreCriticalThinking:
-            score_critical_thinking ?? existingData.score_critical_thinking,
-          scoreAttention: score_attention ?? existingData.score_attention,
+            score_critical_thinking !== undefined
+              ? score_critical_thinking
+              : existingData.score_critical_thinking,
+          scoreAttention:
+            score_attention !== undefined
+              ? score_attention
+              : existingData.score_attention,
           scoreResponsibility:
-            score_responsibility ?? existingData.score_responsibility,
+            score_responsibility !== undefined
+              ? score_responsibility
+              : existingData.score_responsibility,
           scoreCodingSkills:
-            score_coding_skills ?? existingData.score_coding_skills,
-          content: content ?? existingData.content,
+            score_coding_skills !== undefined
+              ? score_coding_skills
+              : existingData.score_coding_skills,
+          content: content !== undefined ? content : existingData.content,
         };
 
         const pdfBuffer = await generateReportPdf(finalData);
@@ -760,12 +770,10 @@ router.get("/stock", async (req, res, next) => {
     );
 
     if (result.rows.length === 0) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: "Stock data not found for your center",
-        });
+      return res.status(404).json({
+        success: false,
+        message: "Stock data not found for your center",
+      });
     }
 
     res.status(200).json({ success: true, data: result.rows[0] });

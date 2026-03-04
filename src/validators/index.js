@@ -55,18 +55,6 @@ const createAdminBody = z.object({
     .positive(),
 });
 
-// SUPER ADMIN — Migrate
-const migrateBody = z.object({
-  enrollment_id: z
-    .number({ required_error: "enrollment_id is required" })
-    .int()
-    .positive(),
-  to_center_id: z
-    .number({ required_error: "to_center_id is required" })
-    .int()
-    .positive(),
-});
-
 // SUPER ADMIN — Monitoring
 const monitoringUploadQuery = paginationQuery.extend({
   center_id: z.string().regex(/^\d+$/).optional(),
@@ -161,6 +149,20 @@ const listEnrollmentsQuery = paginationQuery.extend({
   center_id: z.string().regex(/^\d+$/).optional(),
   teacher_id: z.string().regex(/^\d+$/).optional(),
   module_id: z.string().regex(/^\d+$/).optional(),
+});
+
+// ADMIN — Migrate
+// [FIX] Dipindah dari bagian SUPER ADMIN karena migrate sekarang ada di admin route.
+// Super admin juga bisa akses endpoint ini karena authorize("admin", "super_admin").
+const migrateBody = z.object({
+  enrollment_id: z
+    .number({ required_error: "enrollment_id is required" })
+    .int()
+    .positive(),
+  to_center_id: z
+    .number({ required_error: "to_center_id is required" })
+    .int()
+    .positive(),
 });
 
 // ============================================================
@@ -337,7 +339,6 @@ module.exports = {
   createCenterBody,
   updateCenterBody,
   createAdminBody,
-  migrateBody,
   monitoringUploadQuery,
   monitoringActivityQuery,
   downloadEnrollmentsQuery,
@@ -351,6 +352,7 @@ module.exports = {
   listTeachersQuery,
   createEnrollmentBody,
   listEnrollmentsQuery,
+  migrateBody,
   // Teacher
   printCertBody,
   printCertBatchBody,

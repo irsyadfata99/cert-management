@@ -7,7 +7,7 @@ const {
   buildSet,
   buildOrderBy,
 } = require("../helpers/queryBuilder");
-const { query, withTransaction } = require("../config/database"); // [FIX 2] tambah withTransaction
+const { query, withTransaction } = require("../config/database");
 const {
   validate,
   createStudentBody,
@@ -21,7 +21,7 @@ const {
   listEnrollmentsQuery,
   idParam,
   paginationQuery,
-  migrateBody, // [FIX 2] tambah migrateBody
+  migrateBody,
 } = require("../validators");
 const logger = require("../config/logger");
 
@@ -758,8 +758,9 @@ router.patch(
 );
 
 // ============================================================
-// [FIX 1] PAIR STATUS
-// Cek kelengkapan pair: scan certificate + final report di Drive
+// PAIR STATUS
+// Cek kelengkapan pair: scan certificate + final report di Drive.
+// Digunakan untuk monitoring sebelum enrollment dianggap selesai.
 // ============================================================
 
 // GET /api/admin/enrollments/:id/pair-status
@@ -771,6 +772,8 @@ router.get(
       const centerId = resolveCenterId(req, null);
 
       const result = await query(
+        // [BUG FIX] Tambah AND e.is_active = TRUE agar enrollment non-aktif
+        // tidak bisa di-query melalui endpoint ini.
         `SELECT
            e.id                                          AS enrollment_id,
            s.name                                        AS student_name,
@@ -796,18 +799,22 @@ router.get(
            ORDER BY printed_at DESC LIMIT 1
          ) cert ON TRUE
          LEFT JOIN reports r ON r.enrollment_id = e.id
-         WHERE e.id = $1 ${centerId ? "AND e.center_id = $2" : ""}`,
+         WHERE e.id = $1
+           AND e.is_active = TRUE
+           ${centerId ? "AND e.center_id = $2" : ""}`,
         centerId ? [req.params.id, centerId] : [req.params.id],
       );
 
       if (result.rows.length === 0) {
         return res
           .status(404)
-          .json({ success: false, message: "Enrollment not found" });
+          .json({
+            success: false,
+            message: "Enrollment not found or inactive",
+          });
       }
 
       const data = result.rows[0];
-
       const missing = [];
       if (!data.scan_complete) missing.push("certificate scan");
       if (!data.report_complete) missing.push("final report on Drive");
@@ -823,9 +830,10 @@ router.get(
 );
 
 // ============================================================
-// [FIX 2] MIGRATE — dipindah dari superAdmin ke admin route
-// Admin hanya bisa migrate enrollment dari centernya sendiri.
-// Super admin bisa migrate enrollment dari center manapun.
+// MIGRATE
+// Pindahkan enrollment + student + certificates + medals ke center lain.
+// Admin hanya bisa migrate dari centernya sendiri.
+// Super admin bisa migrate dari center manapun (centerId = undefined → skip filter).
 // ============================================================
 
 // POST /api/admin/migrate
@@ -834,21 +842,25 @@ router.post("/migrate", validate(migrateBody), async (req, res, next) => {
     const { enrollment_id, to_center_id } = req.body;
     const centerId = resolveCenterId(req, null);
 
-    // Validasi enrollment ada & milik center admin ini
+    // Validasi enrollment ada, aktif, dan milik center admin ini
+    // [BUG FIX] Tambah AND e.is_active = TRUE agar enrollment non-aktif tidak bisa di-migrate.
     const enrollmentResult = await query(
-      `SELECT e.id, e.center_id AS from_center_id,
+      `SELECT e.id, e.center_id AS from_center_id, e.student_id,
               s.name AS student_name, c.name AS from_center_name
        FROM enrollments e
        JOIN students s ON s.id = e.student_id
        JOIN centers c  ON c.id = e.center_id
-       WHERE e.id = $1 ${centerId ? "AND e.center_id = $2" : ""}`,
+       WHERE e.id = $1
+         AND e.is_active = TRUE
+         ${centerId ? "AND e.center_id = $2" : ""}`,
       centerId ? [enrollment_id, centerId] : [enrollment_id],
     );
 
     if (enrollmentResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "Enrollment not found or does not belong to your center",
+        message:
+          "Enrollment not found, inactive, or does not belong to your center",
       });
     }
 
@@ -877,9 +889,18 @@ router.post("/migrate", validate(migrateBody), async (req, res, next) => {
     const toCenter = toCenterResult.rows[0];
 
     const result = await withTransaction(async (client) => {
+      // Update enrollment
       await client.query(
         `UPDATE enrollments SET center_id = $1, updated_at = NOW() WHERE id = $2`,
         [to_center_id, enrollment_id],
+      );
+
+      // [BUG FIX] Update student.center_id agar student terlihat oleh admin center baru.
+      // Tanpa ini, admin center tujuan tidak bisa query student tersebut karena
+      // students di-scope by center_id di seluruh admin route.
+      await client.query(
+        `UPDATE students SET center_id = $1, updated_at = NOW() WHERE id = $2`,
+        [to_center_id, enrollment.student_id],
       );
 
       const certResult = await client.query(
@@ -900,6 +921,7 @@ router.post("/migrate", validate(migrateBody), async (req, res, next) => {
 
     logger.info("Enrollment migrated by admin", {
       enrollmentId: enrollment_id,
+      studentId: enrollment.student_id,
       studentName: enrollment.student_name,
       fromCenterId: enrollment.from_center_id,
       fromCenterName: enrollment.from_center_name,
