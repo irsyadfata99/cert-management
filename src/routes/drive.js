@@ -1,15 +1,11 @@
 const express = require("express");
 const multer = require("multer");
 const { authorize } = require("../middleware/authorize");
-const { uploadLimiter } = require("../middleware/rateLimiter");
+const { uploadLimiter, apiLimiter } = require("../middleware/rateLimiter");
 const driveService = require("../services/driveService");
+const stockService = require("../services/stockService");
 const { query } = require("../config/database");
 const logger = require("../config/logger");
-
-const router = express.Router();
-
-router.use(authorize("teacher"));
-router.use(uploadLimiter);
 
 // ============================================================
 // MULTER — memory storage (file tidak disimpan ke disk)
@@ -22,10 +18,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_FILE_SIZE },
-  fileFilter: (req, file, cb) => {
-    // Validasi MIME type ditangani per route di bawah
-    cb(null, true);
-  },
+  fileFilter: (_req, _file, cb) => cb(null, true),
 });
 
 // ============================================================
@@ -44,11 +37,16 @@ const validateMimeType = (file, allowedTypes, res) => {
 };
 
 // ============================================================
-// UPLOAD SCAN CERTIFICATE
-// POST /api/drive/certificates/:certId/scan
+// TEACHER ROUTER — upload scan & report
+// Mounted at /api/drive
 // ============================================================
 
-router.post("/certificates/:certId/scan", upload.single("file"), async (req, res, next) => {
+const teacherRouter = express.Router();
+teacherRouter.use(authorize("teacher"));
+teacherRouter.use(uploadLimiter);
+
+// POST /api/drive/certificates/:certId/scan
+teacherRouter.post("/certificates/:certId/scan", upload.single("file"), async (req, res, next) => {
   try {
     const teacherId = req.user.id;
     const centerId = req.user.center_id;
@@ -63,10 +61,9 @@ router.post("/certificates/:certId/scan", upload.single("file"), async (req, res
     // Validasi certificate milik teacher ini
     const certResult = await query(
       `SELECT c.id, c.cert_unique_id, c.scan_file_id, u.drive_folder_id
-         FROM certificates c
-         JOIN enrollments e ON e.id = c.enrollment_id
-         JOIN users u       ON u.id = c.teacher_id
-         WHERE c.id = $1 AND c.teacher_id = $2 AND c.center_id = $3`,
+       FROM certificates c
+       JOIN users u ON u.id = c.teacher_id
+       WHERE c.id = $1 AND c.teacher_id = $2 AND c.center_id = $3`,
       [certId, teacherId, centerId],
     );
 
@@ -106,11 +103,10 @@ router.post("/certificates/:certId/scan", upload.single("file"), async (req, res
       folderId: cert.drive_folder_id,
     });
 
-    // Simpan scan_file_id ke DB
     await query(
       `UPDATE certificates
-         SET scan_file_id = $1, scan_file_name = $2, scan_uploaded_at = NOW()
-         WHERE id = $3`,
+       SET scan_file_id = $1, scan_file_name = $2, scan_uploaded_at = NOW()
+       WHERE id = $3`,
       [fileId, uploadedName, certId],
     );
 
@@ -130,12 +126,8 @@ router.post("/certificates/:certId/scan", upload.single("file"), async (req, res
   }
 });
 
-// ============================================================
-// UPLOAD FINAL REPORT PDF
 // POST /api/drive/reports/:reportId/upload
-// ============================================================
-
-router.post("/reports/:reportId/upload", upload.single("file"), async (req, res, next) => {
+teacherRouter.post("/reports/:reportId/upload", upload.single("file"), async (req, res, next) => {
   try {
     const teacherId = req.user.id;
     const { reportId } = req.params;
@@ -148,14 +140,12 @@ router.post("/reports/:reportId/upload", upload.single("file"), async (req, res,
 
     // Validasi report milik teacher ini
     const reportResult = await query(
-      `SELECT r.id, r.enrollment_id, r.drive_file_id,
-                e.center_id, u.drive_folder_id,
-                s.name AS student_name
-         FROM reports r
-         JOIN enrollments e ON e.id = r.enrollment_id
-         JOIN users u       ON u.id = r.teacher_id
-         JOIN students s    ON s.id = e.student_id
-         WHERE r.id = $1 AND r.teacher_id = $2`,
+      `SELECT r.id, r.drive_file_id, u.drive_folder_id, s.name AS student_name
+       FROM reports r
+       JOIN enrollments e ON e.id = r.enrollment_id
+       JOIN users u       ON u.id = r.teacher_id
+       JOIN students s    ON s.id = e.student_id
+       WHERE r.id = $1 AND r.teacher_id = $2`,
       [reportId, teacherId],
     );
 
@@ -172,7 +162,7 @@ router.post("/reports/:reportId/upload", upload.single("file"), async (req, res,
       });
     }
 
-    // Hapus file lama jika ada (replace report)
+    // Hapus file lama jika ada
     if (report.drive_file_id) {
       try {
         await driveService.deleteFile(report.drive_file_id);
@@ -196,11 +186,10 @@ router.post("/reports/:reportId/upload", upload.single("file"), async (req, res,
       folderId: report.drive_folder_id,
     });
 
-    // Simpan drive_file_id ke DB
     await query(
       `UPDATE reports
-         SET drive_file_id = $1, drive_file_name = $2, drive_uploaded_at = NOW(), updated_at = NOW()
-         WHERE id = $3`,
+       SET drive_file_id = $1, drive_file_name = $2, drive_uploaded_at = NOW(), updated_at = NOW()
+       WHERE id = $3`,
       [fileId, uploadedName, reportId],
     );
 
@@ -213,11 +202,7 @@ router.post("/reports/:reportId/upload", upload.single("file"), async (req, res,
 
     res.status(200).json({
       success: true,
-      data: {
-        report_id: reportId,
-        drive_file_id: fileId,
-        drive_file_name: uploadedName,
-      },
+      data: { report_id: reportId, drive_file_id: fileId, drive_file_name: uploadedName },
     });
   } catch (err) {
     next(err);
@@ -225,20 +210,16 @@ router.post("/reports/:reportId/upload", upload.single("file"), async (req, res,
 });
 
 // ============================================================
-// STOCK MANAGEMENT (admin & super_admin)
-// POST /api/drive/stock/add
-// POST /api/drive/stock/transfer
+// STOCK ROUTER — admin & super_admin
+// Mounted at /api/drive/stock
 // ============================================================
 
-// Re-mount dengan role yang berbeda untuk stock endpoints
 const stockRouter = express.Router();
 stockRouter.use(authorize("admin", "super_admin"));
-stockRouter.use(uploadLimiter);
-
-const stockService = require("../services/stockService");
+stockRouter.use(apiLimiter);
 
 // GET /api/drive/stock
-stockRouter.get("/", authorize("admin", "super_admin"), async (req, res, next) => {
+stockRouter.get("/", async (req, res, next) => {
   try {
     if (req.user.role === "super_admin") {
       const data = await stockService.getAllStock();
@@ -257,7 +238,6 @@ stockRouter.get("/", authorize("admin", "super_admin"), async (req, res, next) =
 stockRouter.post("/add", async (req, res, next) => {
   try {
     const { center_id, type, quantity } = req.body;
-
     const centerId = req.user.role === "super_admin" ? center_id : req.user.center_id;
 
     if (!centerId || !type || !quantity) {
@@ -278,7 +258,7 @@ stockRouter.post("/add", async (req, res, next) => {
   }
 });
 
-// POST /api/drive/stock/transfer
+// POST /api/drive/stock/transfer — super_admin only
 stockRouter.post("/transfer", authorize("super_admin"), async (req, res, next) => {
   try {
     const { type, from_center_id, to_center_id, quantity } = req.body;
@@ -309,7 +289,6 @@ stockRouter.post("/transfer", authorize("super_admin"), async (req, res, next) =
 stockRouter.patch("/threshold", async (req, res, next) => {
   try {
     const { center_id, type, threshold } = req.body;
-
     const centerId = req.user.role === "super_admin" ? center_id : req.user.center_id;
 
     if (!centerId || !type || threshold === undefined) {
@@ -330,6 +309,14 @@ stockRouter.patch("/threshold", async (req, res, next) => {
   }
 });
 
+// ============================================================
+// MAIN ROUTER — gabungkan teacherRouter & stockRouter
+// Tidak ada middleware di level ini agar masing-masing router
+// bisa punya authorize sendiri tanpa konflik
+// ============================================================
+
+const router = express.Router();
+router.use("/", teacherRouter);
 router.use("/stock", stockRouter);
 
 module.exports = router;

@@ -28,20 +28,56 @@ const fileFormat = combine(
 // Pakai process.cwd() agar path log konsisten dari manapun server dijalankan
 const logDir = path.join(process.cwd(), "logs");
 
+// Custom levels agar "http" masuk ke hierarchy antara info dan debug.
+// Winston default tidak include "http" — harus didefinisikan manual,
+// jika tidak logger.http() akan silent dan morgan log tidak tersimpan.
+const customLevels = {
+  levels: {
+    error: 0,
+    warn: 1,
+    info: 2,
+    http: 3,
+    debug: 4,
+  },
+  colors: {
+    error: "red",
+    warn: "yellow",
+    info: "green",
+    http: "magenta",
+    debug: "cyan",
+  },
+};
+
+winston.addColors(customLevels.colors);
+
 const logger = winston.createLogger({
-  level: process.env.NODE_ENV === "production" ? "info" : "debug",
+  levels: customLevels.levels,
+  // Set ke "http" agar morgan request log masuk di semua environment.
+  // "http" lebih rendah dari "info" sehingga info/warn/error tetap masuk.
+  level: process.env.NODE_ENV === "production" ? "http" : "debug",
   transports: [
     new winston.transports.Console({
       format: consoleFormat,
     }),
+    // combined.log: info ke atas saja (tidak include http request spam)
     new winston.transports.File({
       filename: path.join(logDir, "combined.log"),
       format: fileFormat,
       level: "info",
-      maxsize: 10 * 1024 * 1024, // 10MB per file
-      maxFiles: 7, // simpan 7 file terakhir
+      maxsize: 10 * 1024 * 1024,
+      maxFiles: 7,
       tailable: true,
     }),
+    // http.log: khusus request log dari morgan
+    new winston.transports.File({
+      filename: path.join(logDir, "http.log"),
+      format: fileFormat,
+      level: "http",
+      maxsize: 10 * 1024 * 1024,
+      maxFiles: 7,
+      tailable: true,
+    }),
+    // error.log: khusus error
     new winston.transports.File({
       filename: path.join(logDir, "error.log"),
       format: fileFormat,

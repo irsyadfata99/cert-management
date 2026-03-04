@@ -2,7 +2,7 @@ const express = require("express");
 const { authorize } = require("../middleware/authorize");
 const { apiLimiter } = require("../middleware/rateLimiter");
 const { parsePagination, paginateResponse } = require("../helpers/paginate");
-const { buildWhere, buildOrderBy } = require("../helpers/queryBuilder");
+const { buildWhere, buildSet, buildOrderBy } = require("../helpers/queryBuilder");
 const { query } = require("../config/database");
 const logger = require("../config/logger");
 
@@ -240,30 +240,21 @@ router.patch("/modules/:id", async (req, res, next) => {
   try {
     const { name, description } = req.body;
 
-    if (!name?.trim() && description === undefined) {
+    const fields = {};
+    if (name?.trim()) fields.name = name.trim();
+    if (description !== undefined) fields.description = description?.trim() ?? null;
+
+    if (Object.keys(fields).length === 0) {
       return res.status(400).json({ success: false, message: "No fields to update" });
     }
 
-    const fields = [];
-    const values = [];
-    let idx = 1;
-
-    if (name?.trim()) {
-      fields.push(`name = $${idx++}`);
-      values.push(name.trim());
-    }
-    if (description !== undefined) {
-      fields.push(`description = $${idx++}`);
-      values.push(description?.trim() ?? null);
-    }
-    fields.push("updated_at = NOW()");
-    values.push(req.params.id);
+    const { setClause, values, nextIndex } = buildSet(fields);
 
     const result = await query(
-      `UPDATE modules SET ${fields.join(", ")}
-       WHERE id = $${idx} AND is_active = TRUE
+      `UPDATE modules ${setClause}
+       WHERE id = $${nextIndex} AND is_active = TRUE
        RETURNING id, name, description, is_active, updated_at`,
-      values,
+      [...values, req.params.id],
     );
 
     if (result.rows.length === 0) {

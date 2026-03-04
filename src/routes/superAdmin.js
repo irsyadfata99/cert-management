@@ -2,14 +2,13 @@ const express = require("express");
 const { authorize } = require("../middleware/authorize");
 const { apiLimiter } = require("../middleware/rateLimiter");
 const { parsePagination, paginateResponse } = require("../helpers/paginate");
-const { buildWhere, buildOrderBy } = require("../helpers/queryBuilder");
+const { buildWhere, buildSet, buildOrderBy } = require("../helpers/queryBuilder");
 const { createCenterFolder } = require("../services/driveService");
-const { query, withTransaction } = require("../config/database");
+const { query } = require("../config/database");
 const logger = require("../config/logger");
 
 const router = express.Router();
 
-// Semua route di sini hanya untuk super_admin
 router.use(authorize("super_admin"));
 router.use(apiLimiter);
 
@@ -72,19 +71,12 @@ router.post("/centers", async (req, res, next) => {
       [name.trim(), address?.trim() ?? null, driveFolderId],
     );
 
-    // Auto-create certificate & medal stock untuk center baru
-    await query(
-      `INSERT INTO certificate_stock (center_id) VALUES ($1)
-       ON CONFLICT (center_id) DO NOTHING`,
-      [result.rows[0].id],
-    );
-    await query(
-      `INSERT INTO medal_stock (center_id) VALUES ($1)
-       ON CONFLICT (center_id) DO NOTHING`,
-      [result.rows[0].id],
-    );
+    const centerId = result.rows[0].id;
 
-    logger.info("Center created", { centerId: result.rows[0].id, name, createdBy: req.user.id });
+    // Auto-create certificate & medal stock untuk center baru
+    await Promise.all([query(`INSERT INTO certificate_stock (center_id) VALUES ($1) ON CONFLICT (center_id) DO NOTHING`, [centerId]), query(`INSERT INTO medal_stock (center_id) VALUES ($1) ON CONFLICT (center_id) DO NOTHING`, [centerId])]);
+
+    logger.info("Center created", { centerId, name, createdBy: req.user.id });
 
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (err) {
@@ -95,33 +87,30 @@ router.post("/centers", async (req, res, next) => {
 // PATCH /api/super-admin/centers/:id
 router.patch("/centers/:id", async (req, res, next) => {
   try {
-    const { id } = req.params;
     const { name, address } = req.body;
-
-    if (!name?.trim() && address === undefined) {
-      return res.status(400).json({ success: false, message: "No fields to update" });
-    }
 
     const fields = {};
     if (name?.trim()) fields.name = name.trim();
     if (address !== undefined) fields.address = address?.trim() ?? null;
 
-    const assignments = Object.entries(fields).map(([col, _], i) => `${col} = $${i + 1}`);
-    assignments.push("updated_at = NOW()");
-    const values = [...Object.values(fields), id];
+    if (Object.keys(fields).length === 0) {
+      return res.status(400).json({ success: false, message: "No fields to update" });
+    }
+
+    const { setClause, values, nextIndex } = buildSet(fields);
 
     const result = await query(
-      `UPDATE centers SET ${assignments.join(", ")}
-       WHERE id = $${values.length} AND is_active = TRUE
+      `UPDATE centers ${setClause}
+       WHERE id = $${nextIndex} AND is_active = TRUE
        RETURNING id, name, address, drive_folder_id, is_active, updated_at`,
-      values,
+      [...values, req.params.id],
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Center not found or already inactive" });
     }
 
-    logger.info("Center updated", { centerId: id, updatedBy: req.user.id });
+    logger.info("Center updated", { centerId: req.params.id, updatedBy: req.user.id });
 
     res.status(200).json({ success: true, data: result.rows[0] });
   } catch (err) {
@@ -132,20 +121,18 @@ router.patch("/centers/:id", async (req, res, next) => {
 // PATCH /api/super-admin/centers/:id/deactivate
 router.patch("/centers/:id/deactivate", async (req, res, next) => {
   try {
-    const { id } = req.params;
-
     const result = await query(
       `UPDATE centers SET is_active = FALSE, updated_at = NOW()
        WHERE id = $1 AND is_active = TRUE
        RETURNING id, name`,
-      [id],
+      [req.params.id],
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Center not found or already inactive" });
     }
 
-    logger.info("Center deactivated", { centerId: id, deactivatedBy: req.user.id });
+    logger.info("Center deactivated", { centerId: req.params.id, deactivatedBy: req.user.id });
 
     res.status(200).json({ success: true, message: `Center "${result.rows[0].name}" deactivated` });
   } catch (err) {
@@ -162,10 +149,10 @@ router.get("/admins", async (req, res, next) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);
     const { whereClause, values } = buildWhere([
-      { col: "role", val: "admin" },
-      { col: "center_id", val: req.query.center_id ? parseInt(req.query.center_id) : undefined },
-      { col: "is_active", val: req.query.is_active === undefined ? undefined : req.query.is_active === "true" },
-      { col: "name", val: req.query.search, op: "ILIKE", transform: (v) => `%${v}%` },
+      { col: "u.role", val: "admin" },
+      { col: "u.center_id", val: req.query.center_id ? parseInt(req.query.center_id) : undefined },
+      { col: "u.is_active", val: req.query.is_active === undefined ? undefined : req.query.is_active === "true" },
+      { col: "u.name", val: req.query.search, op: "ILIKE", transform: (v) => `%${v}%` },
     ]);
 
     const orderBy = buildOrderBy(req.query.sort_by, req.query.sort_order, ["name", "created_at"], "name");
@@ -180,7 +167,7 @@ router.get("/admins", async (req, res, next) => {
          LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
         [...values, limit, offset],
       ),
-      query(`SELECT COUNT(*)::int AS total FROM users ${whereClause}`, values),
+      query(`SELECT COUNT(*)::int AS total FROM users u ${whereClause}`, values),
     ]);
 
     res.status(200).json({
@@ -201,7 +188,6 @@ router.post("/admins", async (req, res, next) => {
       return res.status(400).json({ success: false, message: "email, name, and center_id are required" });
     }
 
-    // Pastikan center ada dan aktif
     const centerCheck = await query(`SELECT id FROM centers WHERE id = $1 AND is_active = TRUE`, [center_id]);
     if (centerCheck.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Center not found or inactive" });
@@ -230,20 +216,18 @@ router.post("/admins", async (req, res, next) => {
 // PATCH /api/super-admin/admins/:id/deactivate
 router.patch("/admins/:id/deactivate", async (req, res, next) => {
   try {
-    const { id } = req.params;
-
     const result = await query(
       `UPDATE users SET is_active = FALSE, updated_at = NOW()
        WHERE id = $1 AND role = 'admin' AND is_active = TRUE
        RETURNING id, email, name`,
-      [id],
+      [req.params.id],
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Admin not found or already inactive" });
     }
 
-    logger.info("Admin deactivated", { adminId: id, deactivatedBy: req.user.id });
+    logger.info("Admin deactivated", { adminId: req.params.id, deactivatedBy: req.user.id });
 
     res.status(200).json({ success: true, message: `Admin "${result.rows[0].name}" deactivated` });
   } catch (err) {
@@ -256,7 +240,6 @@ router.patch("/admins/:id/deactivate", async (req, res, next) => {
 // ============================================================
 
 // GET /api/super-admin/monitoring/centers
-// Overview status semua center
 router.get("/monitoring/centers", async (req, res, next) => {
   try {
     const result = await query(
@@ -284,7 +267,6 @@ router.get("/monitoring/centers", async (req, res, next) => {
 });
 
 // GET /api/super-admin/monitoring/upload-status
-// Status upload certificate scan & final report per enrollment
 router.get("/monitoring/upload-status", async (req, res, next) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);
@@ -317,11 +299,7 @@ router.get("/monitoring/upload-status", async (req, res, next) => {
 // GET /api/super-admin/monitoring/stock-alerts
 router.get("/monitoring/stock-alerts", async (req, res, next) => {
   try {
-    const result = await query(
-      `SELECT * FROM vw_stock_alerts
-       WHERE has_alert = TRUE
-       ORDER BY center_name`,
-    );
+    const result = await query(`SELECT * FROM vw_stock_alerts WHERE has_alert = TRUE ORDER BY center_name`);
 
     res.status(200).json({ success: true, data: result.rows });
   } catch (err) {
@@ -330,7 +308,6 @@ router.get("/monitoring/stock-alerts", async (req, res, next) => {
 });
 
 // GET /api/super-admin/monitoring/activity
-// Aktivitas bulanan per center
 router.get("/monitoring/activity", async (req, res, next) => {
   try {
     const { whereClause, values } = buildWhere([{ col: "center_id", val: req.query.center_id ? parseInt(req.query.center_id) : undefined }]);
@@ -348,7 +325,6 @@ router.get("/monitoring/activity", async (req, res, next) => {
 // ============================================================
 
 // GET /api/super-admin/download/enrollments
-// Download data enrollment (certificate + report) per center / module / tanggal
 router.get("/download/enrollments", async (req, res, next) => {
   try {
     const { whereClause, values } = buildWhere([
@@ -360,17 +336,17 @@ router.get("/download/enrollments", async (req, res, next) => {
 
     const result = await query(
       `SELECT
-         e.id                    AS enrollment_id,
-         s.name                  AS student_name,
-         m.name                  AS module_name,
-         u.name                  AS teacher_name,
-         c.name                  AS center_name,
+         e.id                              AS enrollment_id,
+         s.name                            AS student_name,
+         m.name                            AS module_name,
+         u.name                            AS teacher_name,
+         c.name                            AS center_name,
          cert.cert_unique_id,
          cert.ptc_date,
          cert.is_reprint,
-         cert.scan_file_id       IS NOT NULL AS scan_uploaded,
+         cert.scan_file_id IS NOT NULL     AS scan_uploaded,
          cert.scan_uploaded_at,
-         r.drive_file_id         IS NOT NULL AS report_uploaded,
+         r.drive_file_id IS NOT NULL       AS report_uploaded,
          r.drive_uploaded_at,
          med.medal_unique_id,
          e.enrolled_at
@@ -380,8 +356,8 @@ router.get("/download/enrollments", async (req, res, next) => {
        JOIN users u       ON u.id = e.teacher_id
        JOIN centers c     ON c.id = e.center_id
        LEFT JOIN certificates cert ON cert.enrollment_id = e.id AND cert.is_reprint = FALSE
-       LEFT JOIN medals med        ON med.enrollment_id = e.id
-       LEFT JOIN reports r         ON r.enrollment_id = e.id
+       LEFT JOIN medals med        ON med.enrollment_id  = e.id
+       LEFT JOIN reports r         ON r.enrollment_id    = e.id
        ${whereClause}
        ORDER BY c.name, u.name, s.name`,
       values,
