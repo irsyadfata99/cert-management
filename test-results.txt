@@ -1,0 +1,33 @@
+● Validation Warning:
+
+  Unknown option "setupFilesAfterFramework" with value ["./test/integration/setup/testDb.js"] was found.
+  This is probably a typing mistake. Fixing it will remove this message.
+
+  Configuration Documentation:
+  https://jestjs.io/docs/configuration
+
+● Validation Warning:
+
+  Unknown option "setupFilesAfterFramework" with value ["./test/integration/setup/testDb.js"] was found.
+  This is probably a typing mistake. Fixing it will remove this message.
+
+  Configuration Documentation:
+  https://jestjs.io/docs/configuration
+
+  ●  process.exit called with "1"
+
+    [0m [90m 17 |[39m   [36mif[39m (err) {
+     [90m 18 |[39m     logger[33m.[39merror([32m"Database connection failed"[39m[33m,[39m { error[33m:[39m err[33m.[39mmessage })[33m;[39m
+    [31m[1m>[22m[39m[90m 19 |[39m     process[33m.[39mexit([35m1[39m)[33m;[39m
+     [90m    |[39m             [31m[1m^[22m[39m
+     [90m 20 |[39m   }
+     [90m 21 |[39m   logger[33m.[39minfo([32m"Database connected successfully"[39m)[33m;[39m
+     [90m 22 |[39m   release()[33m;[39m[0m
+
+      at PendingItem.exit [as callback] (src/config/database.js:19:13)
+      at Client._connectionCallback (node_modules/pg-pool/index.js:275:23)
+      at Client._handleErrorWhileConnecting (node_modules/pg/lib/client.js:379:19)
+      at Client._handleErrorMessage (node_modules/pg/lib/client.js:399:19)
+      at node_modules/pg/lib/connection.js:115:12
+      at Parser.parse (node_modules/pg-protocol/src/parser.ts:106:9)
+      at Socket.<anonymous> (node_modules/pg-protocol/src/index.ts:7:48)
