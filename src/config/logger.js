@@ -3,15 +3,14 @@ const path = require("path");
 
 const { combine, timestamp, printf, colorize, errors } = winston.format;
 
-// Format untuk console (development — dengan warna)
+// Format untuk console (development)
 const consoleFormat = combine(
   colorize({ all: true }),
   timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
   errors({ stack: true }),
-  printf(({ level, message, timestamp, stack }) => {
-    return stack
-      ? `[${timestamp}] ${level}: ${message}\n${stack}`
-      : `[${timestamp}] ${level}: ${message}`;
+  printf(({ level, message, timestamp, stack, ...meta }) => {
+    const metaStr = Object.keys(meta).length ? " " + JSON.stringify(meta) : "";
+    return stack ? `[${timestamp}] ${level}: ${message}${metaStr}\n${stack}` : `[${timestamp}] ${level}: ${message}${metaStr}`;
   }),
 );
 
@@ -26,24 +25,30 @@ const fileFormat = combine(
   }),
 );
 
+// Pakai process.cwd() agar path log konsisten dari manapun server dijalankan
+const logDir = path.join(process.cwd(), "logs");
+
 const logger = winston.createLogger({
   level: process.env.NODE_ENV === "production" ? "info" : "debug",
   transports: [
-    // Console — semua environment
     new winston.transports.Console({
       format: consoleFormat,
     }),
-    // File: semua log level info ke atas
     new winston.transports.File({
-      filename: path.join(__dirname, "../../logs/combined.log"),
+      filename: path.join(logDir, "combined.log"),
       format: fileFormat,
       level: "info",
+      maxsize: 10 * 1024 * 1024, // 10MB per file
+      maxFiles: 7, // simpan 7 file terakhir
+      tailable: true,
     }),
-    // File: khusus error saja
     new winston.transports.File({
-      filename: path.join(__dirname, "../../logs/error.log"),
+      filename: path.join(logDir, "error.log"),
       format: fileFormat,
       level: "error",
+      maxsize: 10 * 1024 * 1024,
+      maxFiles: 7,
+      tailable: true,
     }),
   ],
 });

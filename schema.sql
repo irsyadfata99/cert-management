@@ -1,17 +1,16 @@
 -- ============================================================
 -- SCHEMA: Certificate & Medal Management System
--- Version: 2.4 (Final)
--- Jalankan seluruh file ini sekaligus di pgAdmin / psql
+-- Version: 2.5
 -- ============================================================
 
 -- EXTENSIONS
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ============================================================
--- TABLES (urutan penting: referenced tables dibuat duluan)
+-- TABLES
 -- ============================================================
 
--- 1. SESSION (untuk connect-pg-simple)
+-- 1. SESSION
 CREATE TABLE IF NOT EXISTS session (
   sid     VARCHAR       NOT NULL COLLATE "default" PRIMARY KEY,
   sess    JSON          NOT NULL,
@@ -40,9 +39,7 @@ CREATE TABLE IF NOT EXISTS users (
                                  CHECK (role IN ('super_admin', 'admin', 'teacher')),
   center_id        INTEGER       REFERENCES centers (id) ON DELETE SET NULL,
   drive_folder_id  TEXT,
-  access_token     TEXT,
-  refresh_token    TEXT,
-  is_active        BOOLEAN       NOT NULL DEFAULT TRUE,
+  is_active        BOOLEAN       NOT NULL DEFAULT FALSE,
   created_at       TIMESTAMP     NOT NULL DEFAULT NOW(),
   updated_at       TIMESTAMP     NOT NULL DEFAULT NOW(),
   CONSTRAINT chk_teacher_has_center
@@ -101,8 +98,6 @@ CREATE TABLE IF NOT EXISTS medal_stock (
 );
 
 -- 9. REPORTS
--- Dibuat SETELAH certificate di-print DAN scan-nya diupload
--- Didefinisikan SEBELUM certificates & medals karena keduanya FK ke sini
 CREATE TABLE IF NOT EXISTS reports (
   id                       SERIAL        PRIMARY KEY,
   enrollment_id            INTEGER       NOT NULL UNIQUE
@@ -121,12 +116,12 @@ CREATE TABLE IF NOT EXISTS reports (
   drive_file_name          TEXT,
   drive_uploaded_at        TIMESTAMP,
   created_at               TIMESTAMP     NOT NULL DEFAULT NOW(),
-  updated_at               TIMESTAMP     NOT NULL DEFAULT NOW()
+  updated_at               TIMESTAMP     NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_word_count_min
+    CHECK (word_count >= 200)
 );
 
 -- 10. CERTIFICATES
--- Flow: Print (kertas) -> Scan & Upload Drive -> Buat Report
--- report_id nullable: NULL saat print, diisi otomatis via trigger saat report dibuat
 CREATE TABLE IF NOT EXISTS certificates (
   id                SERIAL       PRIMARY KEY,
   cert_unique_id    VARCHAR(50)  NOT NULL UNIQUE,
@@ -145,9 +140,6 @@ CREATE TABLE IF NOT EXISTS certificates (
 );
 
 -- 11. MEDALS
--- Flow: Print (kertas) -> Buat Report (tidak perlu scan)
--- report_id nullable: NULL saat print, diisi otomatis via trigger saat report dibuat
--- Tidak ada reprint, tidak ada scan
 CREATE TABLE IF NOT EXISTS medals (
   id               SERIAL       PRIMARY KEY,
   medal_unique_id  VARCHAR(50)  NOT NULL UNIQUE,
@@ -164,13 +156,12 @@ CREATE TABLE IF NOT EXISTS medals (
 -- UNIQUE INDEX
 -- ============================================================
 
--- 1 student hanya boleh punya 1 enrollment aktif
 CREATE UNIQUE INDEX IF NOT EXISTS idx_one_active_enrollment
   ON enrollments (student_id)
   WHERE is_active = TRUE;
 
 -- ============================================================
--- SEQUENCES (untuk auto-generate unique ID)
+-- SEQUENCES
 -- ============================================================
 
 CREATE SEQUENCE IF NOT EXISTS cert_id_seq  START 1;
@@ -226,25 +217,23 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Generate cert_unique_id: CERT-2025-00001
+-- Generate cert_unique_id: CERT-000001
 CREATE OR REPLACE FUNCTION fn_generate_cert_id()
 RETURNS VARCHAR AS $$
 BEGIN
-  RETURN 'CERT-' || TO_CHAR(NOW(), 'YYYY') || '-' ||
-         LPAD(nextval('cert_id_seq')::TEXT, 5, '0');
+  RETURN 'CERT-' || LPAD(nextval('cert_id_seq')::TEXT, 6, '0');
 END;
 $$ LANGUAGE plpgsql;
 
--- Generate medal_unique_id: MEDAL-2025-00001
+-- Generate medal_unique_id: MEDAL-000001
 CREATE OR REPLACE FUNCTION fn_generate_medal_id()
 RETURNS VARCHAR AS $$
 BEGIN
-  RETURN 'MEDAL-' || TO_CHAR(NOW(), 'YYYY') || '-' ||
-         LPAD(nextval('medal_id_seq')::TEXT, 5, '0');
+  RETURN 'MEDAL-' || LPAD(nextval('medal_id_seq')::TEXT, 6, '0');
 END;
 $$ LANGUAGE plpgsql;
 
--- Kurangi stock certificate (p_quantity default 1, bisa lebih untuk batch)
+-- Kurangi stock certificate
 CREATE OR REPLACE FUNCTION fn_decrement_certificate_stock(
   p_center_id INTEGER,
   p_quantity  INTEGER DEFAULT 1
@@ -265,7 +254,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Kurangi stock medal (p_quantity default 1, bisa lebih untuk batch)
+-- Kurangi stock medal
 CREATE OR REPLACE FUNCTION fn_decrement_medal_stock(
   p_center_id INTEGER,
   p_quantity  INTEGER DEFAULT 1
@@ -286,7 +275,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Transfer stock antar center dalam 1 transaksi
+-- Transfer stock antar center
 CREATE OR REPLACE FUNCTION fn_transfer_stock(
   p_type        VARCHAR,
   p_from_center INTEGER,
@@ -353,7 +342,6 @@ $$ LANGUAGE plpgsql;
 -- TRIGGERS
 -- ============================================================
 
--- Auto updated_at
 CREATE TRIGGER trg_centers_updated_at
   BEFORE UPDATE ON centers
   FOR EACH ROW EXECUTE FUNCTION fn_update_updated_at();
@@ -378,7 +366,7 @@ CREATE TRIGGER trg_reports_updated_at
   BEFORE UPDATE ON reports
   FOR EACH ROW EXECUTE FUNCTION fn_update_updated_at();
 
--- Auto-generate cert_unique_id sebelum INSERT
+-- Auto-generate cert_unique_id
 CREATE OR REPLACE FUNCTION fn_set_cert_unique_id()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -393,7 +381,7 @@ CREATE TRIGGER trg_certificates_unique_id
   BEFORE INSERT ON certificates
   FOR EACH ROW EXECUTE FUNCTION fn_set_cert_unique_id();
 
--- Auto-generate medal_unique_id sebelum INSERT
+-- Auto-generate medal_unique_id
 CREATE OR REPLACE FUNCTION fn_set_medal_unique_id()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -408,7 +396,7 @@ CREATE TRIGGER trg_medals_unique_id
   BEFORE INSERT ON medals
   FOR EACH ROW EXECUTE FUNCTION fn_set_medal_unique_id();
 
--- Setelah report dibuat, auto-link report_id ke certificates & medals terkait
+-- Auto-link report_id ke certificates & medals setelah report dibuat
 CREATE OR REPLACE FUNCTION fn_link_report_to_prints()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -430,7 +418,6 @@ CREATE TRIGGER trg_reports_link_to_prints
 -- VIEWS
 -- ============================================================
 
--- Status progress per enrollment
 CREATE OR REPLACE VIEW vw_enrollment_status AS
 SELECT
   e.id                                                             AS enrollment_id,
@@ -467,7 +454,6 @@ WHERE e.is_active = TRUE
 GROUP BY e.id, s.name, m.name, u.name, c.name,
          r.id, r.drive_file_id, r.drive_uploaded_at;
 
--- Status upload scan & report per teacher
 CREATE OR REPLACE VIEW vw_teacher_upload_status AS
 SELECT
   u.id                  AS teacher_id,
@@ -506,7 +492,6 @@ LEFT JOIN reports r ON r.enrollment_id = e.id
 WHERE e.is_active = TRUE
   AND u.is_active = TRUE;
 
--- Aktivitas bulanan per center
 CREATE OR REPLACE VIEW vw_monthly_center_activity AS
 SELECT
   c.id                                                             AS center_id,
@@ -525,7 +510,6 @@ GROUP BY c.id, c.name,
          DATE_TRUNC('month', COALESCE(cert.printed_at, med.printed_at))
 ORDER BY month DESC, c.name;
 
--- Stock alert
 CREATE OR REPLACE VIEW vw_stock_alerts AS
 SELECT
   c.id                                   AS center_id,
@@ -547,9 +531,9 @@ WHERE c.is_active = TRUE;
 
 -- ============================================================
 -- SEED DATA
--- Uncomment dan ganti email sebelum dijalankan pertama kali
+-- Ganti email sebelum dijalankan pertama kali
 -- ============================================================
 
--- INSERT INTO users (email, name, role)
--- VALUES ('superadmin@gmail.com', 'Super Admin', 'super_admin')
+-- INSERT INTO users (email, name, role, is_active)
+-- VALUES ('superadmin@gmail.com', 'Super Admin', 'super_admin', TRUE)
 -- ON CONFLICT (email) DO NOTHING;
