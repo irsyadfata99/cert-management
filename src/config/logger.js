@@ -1,5 +1,6 @@
 const winston = require("winston");
 const path = require("path");
+const fs = require("fs");
 
 const { combine, timestamp, printf, colorize, errors } = winston.format;
 
@@ -27,6 +28,14 @@ const fileFormat = combine(
 
 // Pakai process.cwd() agar path log konsisten dari manapun server dijalankan
 const logDir = path.join(process.cwd(), "logs");
+
+// [FIX] Buat folder logs/ otomatis jika belum ada.
+// Sebelumnya Winston akan throw ENOENT error saat pertama kali deploy
+// ke server baru karena folder logs/ tidak ada di repository (.gitignore).
+// { recursive: true } agar tidak throw jika folder sudah ada.
+if (process.env.NODE_ENV !== "test") {
+  fs.mkdirSync(logDir, { recursive: true });
+}
 
 // Custom levels agar "http" masuk ke hierarchy antara info dan debug.
 // Winston default tidak include "http" — harus didefinisikan manual,
@@ -67,15 +76,17 @@ winston.addColors(customLevels.colors);
 
 const exactLevel = (targetLevel) => winston.format((info) => (info.level === targetLevel ? info : false))();
 
-const logger = winston.createLogger({
-  levels: customLevels.levels,
-  // Set ke "http" agar morgan request log masuk di semua environment.
-  // "http" lebih rendah dari "info" sehingga info/warn/error tetap masuk.
-  level: process.env.NODE_ENV === "production" ? "http" : "debug",
-  transports: [
-    new winston.transports.Console({
-      format: consoleFormat,
-    }),
+// Transports dasar yang selalu aktif
+const transports = [
+  new winston.transports.Console({
+    format: consoleFormat,
+  }),
+];
+
+// File transports hanya di luar test environment
+// agar tidak ada file log yang terbuat saat jest berjalan
+if (process.env.NODE_ENV !== "test") {
+  transports.push(
     // combined.log: info ke atas saja (warn, error) — tidak include http request spam
     new winston.transports.File({
       filename: path.join(logDir, "combined.log"),
@@ -103,7 +114,15 @@ const logger = winston.createLogger({
       maxFiles: 7,
       tailable: true,
     }),
-  ],
+  );
+}
+
+const logger = winston.createLogger({
+  levels: customLevels.levels,
+  // Set ke "http" agar morgan request log masuk di semua environment.
+  // "http" lebih rendah dari "info" sehingga info/warn/error tetap masuk.
+  level: process.env.NODE_ENV === "production" ? "http" : "debug",
+  transports,
 });
 
 module.exports = logger;

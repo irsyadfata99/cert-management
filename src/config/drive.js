@@ -21,7 +21,19 @@ const auth = new google.auth.GoogleAuth({
   scopes: ["https://www.googleapis.com/auth/drive"],
 });
 
-// Drive client singleton
-const drive = google.drive({ version: "v3", auth });
+// [FIX] Sebelumnya: drive di-export sebagai singleton langsung.
+// driveService.js memanggil getDrive() — fungsi yang tidak pernah di-export —
+// sehingga akan throw "TypeError: getDrive is not a function" saat runtime.
+//
+// Fix: export getDrive() sebagai fungsi agar driveService.js bisa memanggilnya.
+// Drive client tetap dibuat sekali (lazy singleton) untuk efisiensi.
+let _drive = null;
 
-module.exports = drive;
+const getDrive = () => {
+  if (!_drive) {
+    _drive = google.drive({ version: "v3", auth });
+  }
+  return _drive;
+};
+
+module.exports = { getDrive };

@@ -1,3 +1,6 @@
+// [FIX] Sebelumnya kemungkinan: const drive = require("../config/drive")
+// atau const { getDrive } = require("../config/drive") tapi drive.js belum export getDrive.
+// Sekarang drive.js sudah export getDrive() — import disesuaikan.
 const { getDrive } = require("../config/drive");
 const { Readable } = require("stream");
 const logger = require("../config/logger");
