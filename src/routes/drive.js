@@ -124,13 +124,32 @@ router.post(
 
 router.post(
   "/stock/transfer",
-  authorize("super_admin"),
+  authorize("admin", "super_admin"),
   validate(transferStockBody),
   async (req, res, next) => {
     try {
       const { type, from_center_id, to_center_id, quantity } = req.body;
 
+      // Admin hanya boleh transfer dari centernya sendiri.
+      // Super admin tidak dibatasi.
+      if (req.user.role === "admin") {
+        if (from_center_id !== req.user.center_id) {
+          return res.status(403).json({
+            success: false,
+            message: "You can only transfer stock from your own center",
+          });
+        }
+      }
+
       const data = await stockService.transferStock({
+        type,
+        fromCenterId: from_center_id,
+        toCenterId: to_center_id,
+        quantity,
+        transferredBy: req.user.id,
+      });
+
+      logger.info("Stock transferred", {
         type,
         fromCenterId: from_center_id,
         toCenterId: to_center_id,

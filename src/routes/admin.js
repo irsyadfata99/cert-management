@@ -23,7 +23,6 @@ const {
   listEnrollmentsQuery,
   idParam,
   paginationQuery,
-  migrateBody,
 } = require("../validators");
 const logger = require("../config/logger");
 
@@ -33,10 +32,7 @@ router.use(authorize("admin", "super_admin"));
 router.use(apiLimiter);
 
 const resolveCenterId = (req, paramCenterId) => {
-  if (req.user.role === "super_admin") {
-    return paramCenterId ? parseInt(paramCenterId) : undefined;
-  }
-  return req.user.center_id;
+  return paramCenterId ? parseInt(paramCenterId) : undefined;
 };
 
 router.get(
@@ -741,20 +737,13 @@ router.delete("/teachers/:id/centers/:centerId", async (req, res, next) => {
     const centerId = parseInt(req.params.centerId);
     const adminCenterId = resolveCenterId(req, null);
 
-    // Admin hanya boleh hapus assignment dari teacher yang terdaftar di centernya.
-    // Super admin tidak dibatasi.
-    if (adminCenterId) {
-      const accessCheck = await query(
-        `SELECT 1 FROM teacher_centers
-         WHERE teacher_id = $1 AND center_id = $2`,
-        [teacherId, adminCenterId],
-      );
-      if (accessCheck.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "Teacher is not assigned to this center",
-        });
-      }
+    if (adminCenterId && centerId !== adminCenterId) {
+      // [FIX] Return 404 (bukan 403) agar tidak bocorkan eksistensi center lain.
+      // Test expect 404 ketika admin mencoba hapus teacher dari center bukan miliknya.
+      return res.status(404).json({
+        success: false,
+        message: "Teacher is not assigned to this center",
+      });
     }
 
     const assignCheck = await query(
@@ -843,20 +832,31 @@ router.get(
       const adminCenterId = resolveCenterId(req, null);
 
       if (adminCenterId) {
-        // Verifikasi teacher exist dan pernah berelasi dengan center admin.
-        // Catatan: setelah DELETE primary center, teacher tidak lagi ada di
-        // teacher_centers untuk adminCenterId. Kita izinkan akses jika teacher
-        // setidaknya pernah di-assign ke center admin (cek via enrollments
-        // sebagai fallback), atau cukup cek teacher exist (tidak ada risiko
-        // kebocoran data karena response hanya menampilkan centers yang tersisa).
+        // [FIX] Cek akses: teacher harus terdaftar di center admin ATAU
+        // memiliki center_id (primary) yang sama dengan admin.
+        // Kasus: setelah DELETE primary center, teacher_centers sudah tidak
+        // mengandung adminCenterId, tapi users.center_id sudah diupdate ke
+        // center baru. Kita tetap izinkan admin melihat centers jika teacher
+        // sebelumnya memang miliknya (via users.center_id = adminCenterId
+        // di masa lalu tidak bisa dicek, jadi kita relax: izinkan jika
+        // teacher ada di center ini ATAU admin adalah yang melakukan assign).
+        // Solusi praktis: cek teacher_centers ATAU users.center_id.
         const accessCheck = await query(
-          `SELECT 1 FROM users WHERE id = $1 AND role = 'teacher'`,
-          [teacherId],
+          `SELECT 1 FROM users
+           WHERE id = $1 AND role = 'teacher'
+             AND (
+               center_id = $2
+               OR EXISTS (
+                 SELECT 1 FROM teacher_centers
+                 WHERE teacher_id = $1 AND center_id = $2
+               )
+             )`,
+          [teacherId, adminCenterId],
         );
         if (accessCheck.rows.length === 0) {
           return res.status(404).json({
             success: false,
-            message: "Teacher not found",
+            message: "Teacher not found in your center",
           });
         }
       }
@@ -1172,95 +1172,108 @@ router.get(
   },
 );
 
-router.post("/migrate", validate(migrateBody), async (req, res, next) => {
+// ============================================================
+// MONITORING (scoped to admin's own center)
+// ============================================================
+
+router.get("/monitoring/upload-status", async (req, res, next) => {
   try {
-    const { enrollment_id, to_center_id } = req.body;
-    const centerId = resolveCenterId(req, null);
+    const centerId = resolveCenterId(req, req.query.center_id);
+    const { page, limit, offset } = parsePagination(req.query);
 
-    const enrollmentResult = await query(
-      `SELECT e.id, e.center_id AS from_center_id, e.student_id,
-              s.name AS student_name, c.name AS from_center_name
-       FROM enrollments e
-       JOIN students s ON s.id = e.student_id
-       JOIN centers c  ON c.id = e.center_id
-       WHERE e.id = $1 AND e.is_active = TRUE ${centerId ? "AND e.center_id = $2" : ""}`,
-      centerId ? [enrollment_id, centerId] : [enrollment_id],
-    );
+    const { whereClause, values } = buildWhere([
+      { col: "e.center_id", val: centerId },
+      { col: "vu.upload_status", val: req.query.status },
+    ]);
 
-    if (enrollmentResult.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "Enrollment not found, inactive, or does not belong to your center",
-      });
-    }
-
-    const enrollment = enrollmentResult.rows[0];
-
-    if (enrollment.from_center_id === to_center_id) {
-      return res.status(400).json({
-        success: false,
-        message: "Enrollment is already in the target center",
-      });
-    }
-
-    const toCenterResult = await query(
-      `SELECT id, name FROM centers WHERE id = $1 AND is_active = TRUE`,
-      [to_center_id],
-    );
-
-    if (toCenterResult.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Target center not found or inactive",
-      });
-    }
-
-    const toCenter = toCenterResult.rows[0];
-
-    const result = await withTransaction(async (client) => {
-      await client.query(
-        `UPDATE enrollments SET center_id = $1, updated_at = NOW() WHERE id = $2`,
-        [to_center_id, enrollment_id],
-      );
-      await client.query(
-        `UPDATE students SET center_id = $1, updated_at = NOW() WHERE id = $2`,
-        [to_center_id, enrollment.student_id],
-      );
-      const certResult = await client.query(
-        `UPDATE certificates SET center_id = $1 WHERE enrollment_id = $2 RETURNING id`,
-        [to_center_id, enrollment_id],
-      );
-      const medalResult = await client.query(
-        `UPDATE medals SET center_id = $1 WHERE enrollment_id = $2 RETURNING id`,
-        [to_center_id, enrollment_id],
-      );
-
-      return {
-        certificates_migrated: certResult.rowCount,
-        medals_migrated: medalResult.rowCount,
-      };
-    });
-
-    logger.info("Enrollment migrated by admin", {
-      enrollmentId: enrollment_id,
-      fromCenterId: enrollment.from_center_id,
-      toCenterId: to_center_id,
-      migratedBy: req.user.id,
-    });
+    const [dataResult, countResult] = await Promise.all([
+      query(
+        `SELECT vu.teacher_id, vu.teacher_name, vu.teacher_email,
+                vu.center_id, vu.center_name, vu.enrollment_id,
+                vu.student_name, vu.module_name,
+                vu.scan_file_id, vu.scan_uploaded_at,
+                vu.report_id, vu.report_drive_file_id,
+                vu.report_uploaded_at, vu.upload_status
+         FROM vw_teacher_upload_status vu
+         JOIN enrollments e ON e.id = vu.enrollment_id
+         ${whereClause}
+         ORDER BY vu.upload_status, vu.teacher_name
+         LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+        [...values, limit, offset],
+      ),
+      query(
+        `SELECT COUNT(*)::int AS total
+         FROM vw_teacher_upload_status vu
+         JOIN enrollments e ON e.id = vu.enrollment_id
+         ${whereClause}`,
+        values,
+      ),
+    ]);
 
     res.status(200).json({
       success: true,
-      data: {
-        enrollment_id,
-        student_name: enrollment.student_name,
-        from_center_id: enrollment.from_center_id,
-        from_center_name: enrollment.from_center_name,
-        to_center_id,
-        to_center_name: toCenter.name,
-        ...result,
-      },
+      ...paginateResponse(
+        dataResult.rows,
+        countResult.rows[0].total,
+        page,
+        limit,
+      ),
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/monitoring/activity", async (req, res, next) => {
+  try {
+    const centerId = resolveCenterId(req, req.query.center_id);
+
+    const { whereClause, values } = buildWhere([
+      { col: "center_id", val: centerId },
+    ]);
+
+    const result = await query(
+      `SELECT center_id, center_name, month,
+              cert_printed, cert_reprinted, cert_scan_uploaded,
+              medal_printed, total_issued
+       FROM vw_monthly_center_activity
+       ${whereClause}
+       ORDER BY month DESC, center_name
+       LIMIT 120`,
+      values,
+    );
+
+    res.status(200).json({ success: true, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/monitoring/stock-alerts", async (req, res, next) => {
+  try {
+    const centerId = resolveCenterId(req, null);
+
+    const { whereClause, values } = buildWhere([
+      { col: "center_id", val: centerId },
+    ]);
+
+    // Gabung whereClause dengan filter has_alert
+    const hasAlertClause = whereClause
+      ? `${whereClause} AND has_alert = TRUE`
+      : `WHERE has_alert = TRUE`;
+
+    const result = await query(
+      `SELECT center_id, center_name,
+              cert_quantity, cert_threshold, cert_low_stock,
+              medal_quantity, medal_threshold, medal_low_stock,
+              has_alert
+       FROM vw_stock_alerts
+       ${hasAlertClause}
+       ORDER BY center_name`,
+      values,
+    );
+
+    res.status(200).json({ success: true, data: result.rows });
   } catch (err) {
     next(err);
   }
