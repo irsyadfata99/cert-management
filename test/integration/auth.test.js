@@ -19,16 +19,9 @@ afterAll(async () => {
   await closeDb();
 });
 
-// ============================================================
-// HELPER: simulasi login dengan inject session manual
-// ============================================================
-
 const loginAs = async (user) => {
   const agent = request.agent(app);
-
-  // Inject user ke session via endpoint khusus test
   await agent.post("/__test/login").send({ userId: user.id });
-
   return agent;
 };
 
@@ -39,14 +32,14 @@ describe("GET /auth/me", () => {
     center = await seedCenter({ name: "Center Auth Test" });
 
     superAdmin = await seedUser({
-      email: "superadmin@test.com",
+      email: "superadmin.authme@test.com",
       name: "Super Admin",
       role: "super_admin",
       is_active: true,
     });
 
     admin = await seedUser({
-      email: "admin@test.com",
+      email: "admin.authme@test.com",
       name: "Admin Test",
       role: "admin",
       center_id: center.id,
@@ -54,7 +47,7 @@ describe("GET /auth/me", () => {
     });
 
     teacher = await seedUser({
-      email: "teacher@test.com",
+      email: "teacher.authme@test.com",
       name: "Teacher Test",
       role: "teacher",
       center_id: center.id,
@@ -75,7 +68,7 @@ describe("GET /auth/me", () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.role).toBe("super_admin");
-    expect(res.body.data.email).toBe("superadmin@test.com");
+    expect(res.body.data.email).toBe("superadmin.authme@test.com");
   });
 
   test("admin berhasil get /me", async () => {
@@ -111,7 +104,7 @@ describe("POST /auth/logout", () => {
   beforeAll(async () => {
     const center = await seedCenter({ name: "Center Logout Test" });
     teacher = await seedUser({
-      email: "teacher.logout@test.com",
+      email: "teacher.logout.auth@test.com",
       name: "Teacher Logout",
       role: "teacher",
       center_id: center.id,
@@ -147,13 +140,14 @@ describe("POST /auth/logout", () => {
 // ============================================================
 
 describe("Session Revalidation — Cache Staleness", () => {
+  // Email unik agar tidak bentrok dengan test file lain saat Jest jalan paralel
   let center, activeUser;
 
   beforeAll(async () => {
     center = await seedCenter({ name: "Center Revalidation Test" });
 
     activeUser = await seedUser({
-      email: "user.revalidate@test.com",
+      email: "user.revalidate.unique@test.com",
       name: "User Revalidate",
       role: "teacher",
       center_id: center.id,
@@ -161,91 +155,59 @@ describe("Session Revalidation — Cache Staleness", () => {
     });
   });
 
+  afterEach(async () => {
+    // Restore user ke kondisi aktif setelah setiap test
+    await pool.query(
+      `UPDATE users SET is_active = TRUE, name = 'User Revalidate', updated_at = NOW() WHERE id = $1`,
+      [activeUser.id],
+    );
+  });
+
   test("user aktif bisa akses endpoint normal", async () => {
     const agent = await loginAs(activeUser);
     const res = await agent.get("/auth/me");
-
     expect(res.status).toBe(200);
   });
 
   test("401 setelah user di-deactivate — cache stale terdeteksi", async () => {
     const agent = await loginAs(activeUser);
 
-    // Pastikan dulu bisa akses
     const before = await agent.get("/auth/me");
     expect(before.status).toBe(200);
 
-    // Deactivate langsung di DB (simulasi admin deactivate dari luar session ini)
+    // Set updated_at lebih baru dari cached_at agar stale check trigger
     await pool.query(
-      `UPDATE users SET is_active = FALSE, updated_at = NOW() WHERE id = $1`,
+      `UPDATE users SET is_active = FALSE, updated_at = NOW() + INTERVAL '1 second' WHERE id = $1`,
       [activeUser.id],
     );
 
-    // Request berikutnya harus ditolak karena cache stale → refresh → is_active false
     const after = await agent.get("/auth/me");
     expect(after.status).toBe(401);
-
-    // Restore untuk test lain
-    await pool.query(
-      `UPDATE users SET is_active = TRUE, updated_at = NOW() WHERE id = $1`,
-      [activeUser.id],
-    );
   });
 
   test("user yang di-reactivate bisa akses kembali setelah login ulang", async () => {
-    // User dimatikan lalu dihidupkan lagi
-    await pool.query(
-      `UPDATE users SET is_active = FALSE, updated_at = NOW() WHERE id = $1`,
-      [activeUser.id],
-    );
-    await pool.query(
-      `UPDATE users SET is_active = TRUE, updated_at = NOW() WHERE id = $1`,
-      [activeUser.id],
-    );
-
-    // Login ulang (session baru)
+    // afterEach sudah restore is_active = TRUE
     const agent = await loginAs(activeUser);
     const res = await agent.get("/auth/me");
-
     expect(res.status).toBe(200);
   });
 
-  test("perubahan nama user terefleksi setelah cache stale", async () => {
-    const agent = await loginAs(activeUser);
-
-    // Pastikan nama awal
-    const before = await agent.get("/auth/me");
-    expect(before.status).toBe(200);
-    expect(before.body.data.name).toBe("User Revalidate");
-
-    // Update nama langsung di DB
+  test("perubahan nama user terefleksi di session baru", async () => {
     await pool.query(
       `UPDATE users SET name = 'User Revalidate Updated', updated_at = NOW() WHERE id = $1`,
       [activeUser.id],
     );
 
-    // Cache masih valid di request langsung berikutnya (dalam 30 detik)
-    // Tapi jika stale check interval sudah lewat, nama baru harus muncul
-    // Untuk test ini: paksa cache expire dengan manipulasi waktu tidak praktis,
-    // jadi kita verifikasi lewat login ulang
     const freshAgent = await loginAs(activeUser);
     const after = await freshAgent.get("/auth/me");
 
     expect(after.status).toBe(200);
     expect(after.body.data.name).toBe("User Revalidate Updated");
-
-    // Restore
-    await pool.query(
-      `UPDATE users SET name = 'User Revalidate', updated_at = NOW() WHERE id = $1`,
-      [activeUser.id],
-    );
   });
 
-  test("teacher multi-center: center_ids terupdate setelah center baru di-assign", async () => {
-    // Verifikasi bahwa session fresh mencerminkan center assignment terbaru
+  test("teacher multi-center: akses center baru setelah di-assign", async () => {
     const mcCenter = await seedCenter({ name: "MC Session Test Center" });
 
-    // Assign center baru langsung di DB
     await pool.query(
       `INSERT INTO teacher_centers (teacher_id, center_id, is_primary)
        VALUES ($1, $2, FALSE)
@@ -253,13 +215,10 @@ describe("Session Revalidation — Cache Staleness", () => {
       [activeUser.id, mcCenter.id],
     );
 
-    // Login ulang → session baru harus punya center_ids yang updated
     const freshAgent = await loginAs(activeUser);
     const res = await freshAgent.get("/auth/me");
-
     expect(res.status).toBe(200);
-    // center_ids tidak wajib di-expose di /me, tapi request ke endpoint teacher harus berhasil
-    // Verifikasi: teacher bisa lihat stock center baru
+
     const stockRes = await freshAgent.get("/api/teacher/stock");
     expect(stockRes.status).toBe(200);
   });

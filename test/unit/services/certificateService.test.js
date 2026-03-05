@@ -33,7 +33,6 @@ describe("printSingle", () => {
         .mockResolvedValueOnce({
           rows: [
             {
-              // insert cert
               id: 1,
               cert_unique_id: "CERT-000001",
               enrollment_id: 1,
@@ -118,13 +117,12 @@ describe("printBatch", () => {
   test("berhasil print batch", async () => {
     mockTransaction((client) => {
       client.query
-        .mockResolvedValueOnce({ rows: [{ id: 1 }, { id: 2 }] }) // enrollment check
+        .mockResolvedValueOnce({ rows: [{ id: 1 }, { id: 2 }] }) // enrollment check — 2 rows untuk 2 items
         .mockResolvedValueOnce({ rows: [] }) // tidak ada duplikat
         .mockResolvedValueOnce({ rows: [{}] }) // decrement stock
         .mockResolvedValueOnce({ rows: [{ batch_id: "uuid-123" }] }) // gen uuid
         .mockResolvedValueOnce({
           rows: [
-            // bulk insert
             {
               id: 1,
               cert_unique_id: "CERT-000001",
@@ -160,7 +158,7 @@ describe("printBatch", () => {
 
   test("salah satu enrollment tidak ditemukan throw 404", async () => {
     mockTransaction((client) => {
-      // hanya return 1 dari 2 enrollment
+      // Hanya return 1 dari 2 enrollment yang diminta
       client.query.mockResolvedValueOnce({ rows: [{ id: 1 }] });
     });
 
@@ -179,7 +177,7 @@ describe("printBatch", () => {
   test("duplikat cert throw 409", async () => {
     mockTransaction((client) => {
       client.query
-        .mockResolvedValueOnce({ rows: [{ id: 1 }] }) // enrollment valid
+        .mockResolvedValueOnce({ rows: [{ id: 1 }] }) // enrollment valid (1 item)
         .mockResolvedValueOnce({ rows: [{ enrollment_id: 1 }] }); // sudah pernah print
     });
 

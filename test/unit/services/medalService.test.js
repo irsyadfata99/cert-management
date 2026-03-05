@@ -113,7 +113,7 @@ describe("printBatch medal", () => {
   test("berhasil print batch", async () => {
     mockTransaction((client) => {
       client.query
-        .mockResolvedValueOnce({ rows: [{ id: 1 }, { id: 2 }] }) // enrollment valid
+        .mockResolvedValueOnce({ rows: [{ id: 1 }, { id: 2 }] }) // enrollment valid (2 rows)
         .mockResolvedValueOnce({ rows: [] }) // tidak ada duplikat
         .mockResolvedValueOnce({ rows: [{}] }) // decrement stock
         .mockResolvedValueOnce({ rows: [{ batch_id: "uuid-456" }] }) // gen uuid
@@ -150,11 +150,29 @@ describe("printBatch medal", () => {
     expect(result.batchId).toBe("uuid-456");
   });
 
+  test("salah satu enrollment tidak ditemukan throw 404", async () => {
+    mockTransaction((client) => {
+      // hanya return 1 dari 2 enrollment
+      client.query.mockResolvedValueOnce({ rows: [{ id: 1 }] });
+    });
+
+    await expect(
+      printBatch({
+        items: [
+          { enrollmentId: 1, ptcDate: "2024-01-01" },
+          { enrollmentId: 999, ptcDate: "2024-01-01" },
+        ],
+        teacherId: 1,
+        centerId: 1,
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
   test("duplikat medal throw 409", async () => {
     mockTransaction((client) => {
       client.query
-        .mockResolvedValueOnce({ rows: [{ id: 1 }] })
-        .mockResolvedValueOnce({ rows: [{ enrollment_id: 1 }] });
+        .mockResolvedValueOnce({ rows: [{ id: 1 }] }) // enrollment valid (1 row untuk 1 item)
+        .mockResolvedValueOnce({ rows: [{ enrollment_id: 1 }] }); // sudah pernah print
     });
 
     await expect(
