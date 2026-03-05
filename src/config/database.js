@@ -12,24 +12,24 @@ const pool = new Pool({
   connectionTimeoutMillis: 10000,
 });
 
-// Test koneksi saat server start
-pool.connect((err, client, release) => {
-  if (err) {
-    logger.error("Database connection failed", { error: err.message });
-    process.exit(1);
-  }
-  logger.info("Database connected successfully");
-  release();
-});
+// Test koneksi saat server start — SKIP jika test environment
+if (process.env.NODE_ENV !== "test") {
+  pool.connect((err, client, release) => {
+    if (err) {
+      logger.error("Database connection failed", { error: err.message });
+      process.exit(1);
+    }
+    logger.info("Database connected successfully");
+    release();
+  });
+}
 
-// Event listener untuk unexpected errors pada idle client
 pool.on("error", (err) => {
   logger.error("Unexpected database error on idle client", {
     error: err.message,
   });
 });
 
-// Shorthand query dengan error logging
 const query = (text, params) => {
   return pool.query(text, params).catch((err) => {
     logger.error("Database query error", { query: text, error: err.message });
@@ -37,7 +37,6 @@ const query = (text, params) => {
   });
 };
 
-// Helper transaksi
 const withTransaction = async (callback) => {
   const client = await pool.connect();
   try {

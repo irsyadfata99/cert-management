@@ -1,4 +1,5 @@
 require("dotenv").config({ path: ".env.test" });
+process.env.NODE_ENV = "test";
 
 jest.mock("../../../src/services/driveService", () => ({
   createFolder: jest.fn().mockResolvedValue("mock_folder_id"),
@@ -47,9 +48,7 @@ if (process.env.NODE_ENV === "test") {
     req.session.passport = { user: user.id };
     req.session.cachedUser = user;
 
-    await new Promise((resolve, reject) =>
-      req.session.save((err) => (err ? reject(err) : resolve())),
-    );
+    await new Promise((resolve, reject) => req.session.save((err) => (err ? reject(err) : resolve())));
 
     res.status(200).json({ success: true, user });
   });
