@@ -53,6 +53,10 @@ const updateAdminBody = z
     message: "At least one field (name or email) must be provided",
   });
 
+const listAdminsQuery = paginationQuery.extend({
+  center_id: z.string().regex(/^\d+$/).optional(),
+});
+
 const monitoringUploadQuery = paginationQuery.extend({
   center_id: z.string().regex(/^\d+$/).optional(),
   status: z
@@ -324,6 +328,7 @@ module.exports = {
   updateCenterBody,
   createAdminBody,
   updateAdminBody,
+  listAdminsQuery,
   monitoringUploadQuery,
   monitoringActivityQuery,
   downloadEnrollmentsQuery,

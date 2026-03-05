@@ -14,6 +14,7 @@ const {
   updateCenterBody,
   createAdminBody,
   updateAdminBody,
+  listAdminsQuery,
   monitoringUploadQuery,
   monitoringActivityQuery,
   downloadEnrollmentsQuery,
@@ -226,13 +227,17 @@ router.patch(
 
 router.get(
   "/admins",
-  validate(paginationQuery, "query"),
+  validate(listAdminsQuery, "query"),
   async (req, res, next) => {
     try {
       const { page, limit, offset } = parsePagination(req.query);
 
       const { whereClause, values } = buildWhere([
         { col: "u.role", val: "admin" },
+        {
+          col: "u.center_id",
+          val: req.query.center_id ? parseInt(req.query.center_id) : undefined,
+        },
         {
           col: "u.is_active",
           val:

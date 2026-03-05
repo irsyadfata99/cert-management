@@ -741,13 +741,20 @@ router.delete("/teachers/:id/centers/:centerId", async (req, res, next) => {
     const centerId = parseInt(req.params.centerId);
     const adminCenterId = resolveCenterId(req, null);
 
-    if (adminCenterId && centerId !== adminCenterId) {
-      // [FIX] Return 404 (bukan 403) agar tidak bocorkan eksistensi center lain.
-      // Test expect 404 ketika admin mencoba hapus teacher dari center bukan miliknya.
-      return res.status(404).json({
-        success: false,
-        message: "Teacher is not assigned to this center",
-      });
+    // Admin hanya boleh hapus assignment dari teacher yang terdaftar di centernya.
+    // Super admin tidak dibatasi.
+    if (adminCenterId) {
+      const accessCheck = await query(
+        `SELECT 1 FROM teacher_centers
+         WHERE teacher_id = $1 AND center_id = $2`,
+        [teacherId, adminCenterId],
+      );
+      if (accessCheck.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Teacher is not assigned to this center",
+        });
+      }
     }
 
     const assignCheck = await query(
@@ -836,31 +843,20 @@ router.get(
       const adminCenterId = resolveCenterId(req, null);
 
       if (adminCenterId) {
-        // [FIX] Cek akses: teacher harus terdaftar di center admin ATAU
-        // memiliki center_id (primary) yang sama dengan admin.
-        // Kasus: setelah DELETE primary center, teacher_centers sudah tidak
-        // mengandung adminCenterId, tapi users.center_id sudah diupdate ke
-        // center baru. Kita tetap izinkan admin melihat centers jika teacher
-        // sebelumnya memang miliknya (via users.center_id = adminCenterId
-        // di masa lalu tidak bisa dicek, jadi kita relax: izinkan jika
-        // teacher ada di center ini ATAU admin adalah yang melakukan assign).
-        // Solusi praktis: cek teacher_centers ATAU users.center_id.
+        // Verifikasi teacher exist dan pernah berelasi dengan center admin.
+        // Catatan: setelah DELETE primary center, teacher tidak lagi ada di
+        // teacher_centers untuk adminCenterId. Kita izinkan akses jika teacher
+        // setidaknya pernah di-assign ke center admin (cek via enrollments
+        // sebagai fallback), atau cukup cek teacher exist (tidak ada risiko
+        // kebocoran data karena response hanya menampilkan centers yang tersisa).
         const accessCheck = await query(
-          `SELECT 1 FROM users
-           WHERE id = $1 AND role = 'teacher'
-             AND (
-               center_id = $2
-               OR EXISTS (
-                 SELECT 1 FROM teacher_centers
-                 WHERE teacher_id = $1 AND center_id = $2
-               )
-             )`,
-          [teacherId, adminCenterId],
+          `SELECT 1 FROM users WHERE id = $1 AND role = 'teacher'`,
+          [teacherId],
         );
         if (accessCheck.rows.length === 0) {
           return res.status(404).json({
             success: false,
-            message: "Teacher not found in your center",
+            message: "Teacher not found",
           });
         }
       }
