@@ -4,18 +4,18 @@ const fs = require("fs");
 
 const { combine, timestamp, printf, colorize, errors } = winston.format;
 
-// Format untuk console (development)
 const consoleFormat = combine(
   colorize({ all: true }),
   timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
   errors({ stack: true }),
   printf(({ level, message, timestamp, stack, ...meta }) => {
     const metaStr = Object.keys(meta).length ? " " + JSON.stringify(meta) : "";
-    return stack ? `[${timestamp}] ${level}: ${message}${metaStr}\n${stack}` : `[${timestamp}] ${level}: ${message}${metaStr}`;
+    return stack
+      ? `[${timestamp}] ${level}: ${message}${metaStr}\n${stack}`
+      : `[${timestamp}] ${level}: ${message}${metaStr}`;
   }),
 );
 
-// Format untuk file (tanpa warna)
 const fileFormat = combine(
   timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
   errors({ stack: true }),
@@ -26,20 +26,12 @@ const fileFormat = combine(
   }),
 );
 
-// Pakai process.cwd() agar path log konsisten dari manapun server dijalankan
 const logDir = path.join(process.cwd(), "logs");
 
-// [FIX] Buat folder logs/ otomatis jika belum ada.
-// Sebelumnya Winston akan throw ENOENT error saat pertama kali deploy
-// ke server baru karena folder logs/ tidak ada di repository (.gitignore).
-// { recursive: true } agar tidak throw jika folder sudah ada.
 if (process.env.NODE_ENV !== "test") {
   fs.mkdirSync(logDir, { recursive: true });
 }
 
-// Custom levels agar "http" masuk ke hierarchy antara info dan debug.
-// Winston default tidak include "http" — harus didefinisikan manual,
-// jika tidak logger.http() akan silent dan morgan log tidak tersimpan.
 const customLevels = {
   levels: {
     error: 0,
@@ -59,35 +51,17 @@ const customLevels = {
 
 winston.addColors(customLevels.colors);
 
-// ============================================================
-// EXACT LEVEL FILTER
-//
-// Winston file transport dengan `level: "http"` menangkap SEMUA
-// level yang numeric value-nya <= http (yaitu error, warn, info, http)
-// karena winston memakai hierarchy ceiling, bukan exact match.
-//
-// Akibatnya http.log menjadi duplikat combined.log + http requests,
-// bukan khusus http saja seperti yang diharapkan.
-//
-// Fix: gunakan format filter yang hanya meloloskan log dengan level
-// persis sama dengan target — sehingga http.log benar-benar hanya
-// berisi request log dari morgan.
-// ============================================================
+const exactLevel = (targetLevel) =>
+  winston.format((info) => (info.level === targetLevel ? info : false))();
 
-const exactLevel = (targetLevel) => winston.format((info) => (info.level === targetLevel ? info : false))();
-
-// Transports dasar yang selalu aktif
 const transports = [
   new winston.transports.Console({
     format: consoleFormat,
   }),
 ];
 
-// File transports hanya di luar test environment
-// agar tidak ada file log yang terbuat saat jest berjalan
 if (process.env.NODE_ENV !== "test") {
   transports.push(
-    // combined.log: info ke atas saja (warn, error) — tidak include http request spam
     new winston.transports.File({
       filename: path.join(logDir, "combined.log"),
       format: fileFormat,
@@ -96,7 +70,6 @@ if (process.env.NODE_ENV !== "test") {
       maxFiles: 7,
       tailable: true,
     }),
-    // http.log: KHUSUS request log dari morgan (exact level = "http")
     new winston.transports.File({
       filename: path.join(logDir, "http.log"),
       format: combine(exactLevel("http"), fileFormat),
@@ -105,7 +78,6 @@ if (process.env.NODE_ENV !== "test") {
       maxFiles: 7,
       tailable: true,
     }),
-    // error.log: khusus error
     new winston.transports.File({
       filename: path.join(logDir, "error.log"),
       format: fileFormat,
@@ -119,8 +91,6 @@ if (process.env.NODE_ENV !== "test") {
 
 const logger = winston.createLogger({
   levels: customLevels.levels,
-  // Set ke "http" agar morgan request log masuk di semua environment.
-  // "http" lebih rendah dari "info" sehingga info/warn/error tetap masuk.
   level: process.env.NODE_ENV === "production" ? "http" : "debug",
   transports,
 });

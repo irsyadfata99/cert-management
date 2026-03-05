@@ -27,11 +27,6 @@ const router = express.Router();
 router.use(authorize("super_admin"));
 router.use(apiLimiter);
 
-// ============================================================
-// CENTERS
-// ============================================================
-
-// GET /api/super-admin/centers
 router.get(
   "/centers",
   validate(paginationQuery, "query"),
@@ -90,7 +85,6 @@ router.get(
   },
 );
 
-// POST /api/super-admin/centers
 router.post("/centers", validate(createCenterBody), async (req, res, next) => {
   try {
     const { name, address } = req.body;
@@ -130,7 +124,6 @@ router.post("/centers", validate(createCenterBody), async (req, res, next) => {
   }
 });
 
-// PATCH /api/super-admin/centers/:id
 router.patch(
   "/centers/:id",
   validate(idParam, "params"),
@@ -169,7 +162,6 @@ router.patch(
   },
 );
 
-// PATCH /api/super-admin/centers/:id/deactivate
 router.patch(
   "/centers/:id/deactivate",
   validate(idParam, "params"),
@@ -183,35 +175,26 @@ router.patch(
       );
 
       if (result.rows.length === 0) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message: "Center not found or already inactive",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Center not found or already inactive",
+        });
       }
 
       logger.info("Center deactivated", {
         centerId: req.params.id,
         deactivatedBy: req.user.id,
       });
-      res
-        .status(200)
-        .json({
-          success: true,
-          message: `Center "${result.rows[0].name}" deactivated`,
-        });
+      res.status(200).json({
+        success: true,
+        message: `Center "${result.rows[0].name}" deactivated`,
+      });
     } catch (err) {
       next(err);
     }
   },
 );
 
-// ============================================================
-// ADMINS
-// ============================================================
-
-// GET /api/super-admin/admins
 router.get(
   "/admins",
   validate(paginationQuery, "query"),
@@ -274,7 +257,6 @@ router.get(
   },
 );
 
-// POST /api/super-admin/admins
 router.post("/admins", validate(createAdminBody), async (req, res, next) => {
   try {
     const { email, name, center_id } = req.body;
@@ -315,12 +297,6 @@ router.post("/admins", validate(createAdminBody), async (req, res, next) => {
   }
 });
 
-// ============================================================
-// [FIX 1] PATCH /api/super-admin/admins/:id
-// Update nama dan/atau email admin.
-// Jika email berubah, google_id & avatar di-reset agar admin
-// login ulang via Google dengan email baru.
-// ============================================================
 router.patch(
   "/admins/:id",
   validate(idParam, "params"),
@@ -343,26 +319,22 @@ router.patch(
       const currentAdmin = existing.rows[0];
       const emailChanged = email && email.toLowerCase() !== currentAdmin.email;
 
-      // Jika email berubah, pastikan tidak konflik dengan user lain
       if (emailChanged) {
         const emailConflict = await query(
           `SELECT id FROM users WHERE email = $1 AND id != $2`,
           [email.toLowerCase(), req.params.id],
         );
         if (emailConflict.rows.length > 0) {
-          return res
-            .status(409)
-            .json({
-              success: false,
-              message: "Email already used by another user",
-            });
+          return res.status(409).json({
+            success: false,
+            message: "Email already used by another user",
+          });
         }
       }
 
       const fields = {};
       if (name) fields.name = name;
       if (email) fields.email = email.toLowerCase();
-      // Reset google_id & avatar jika email berubah — paksa login ulang
       if (emailChanged) {
         fields.google_id = null;
         fields.avatar = null;
@@ -398,7 +370,6 @@ router.patch(
   },
 );
 
-// PATCH /api/super-admin/admins/:id/deactivate
 router.patch(
   "/admins/:id/deactivate",
   validate(idParam, "params"),
@@ -412,35 +383,26 @@ router.patch(
       );
 
       if (result.rows.length === 0) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message: "Admin not found or already inactive",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Admin not found or already inactive",
+        });
       }
 
       logger.info("Admin deactivated", {
         adminId: req.params.id,
         deactivatedBy: req.user.id,
       });
-      res
-        .status(200)
-        .json({
-          success: true,
-          message: `Admin "${result.rows[0].name}" deactivated`,
-        });
+      res.status(200).json({
+        success: true,
+        message: `Admin "${result.rows[0].name}" deactivated`,
+      });
     } catch (err) {
       next(err);
     }
   },
 );
 
-// ============================================================
-// MONITORING
-// ============================================================
-
-// GET /api/super-admin/monitoring/uploads
 router.get(
   "/monitoring/uploads",
   validate(monitoringUploadQuery, "query"),
@@ -498,7 +460,6 @@ router.get(
   },
 );
 
-// GET /api/super-admin/monitoring/activity
 router.get(
   "/monitoring/activity",
   validate(monitoringActivityQuery, "query"),
@@ -529,7 +490,6 @@ router.get(
   },
 );
 
-// GET /api/super-admin/monitoring/stock
 router.get("/monitoring/stock", async (req, res, next) => {
   try {
     const result = await query(
@@ -547,12 +507,6 @@ router.get("/monitoring/stock", async (req, res, next) => {
   }
 });
 
-// ============================================================
-// DOWNLOAD ENROLLMENTS — CSV
-// [FIX 4] Stream CSV langsung dari backend, bukan JSON.
-// ============================================================
-
-// GET /api/super-admin/download/enrollments
 router.get(
   "/download/enrollments",
   validate(downloadEnrollmentsQuery, "query"),
@@ -610,10 +564,6 @@ router.get(
       );
 
       const rows = result.rows;
-
-      // --------------------------------------------------------
-      // Build CSV in-memory dan stream ke client
-      // --------------------------------------------------------
       const COLUMNS = [
         { key: "enrollment_id", label: "Enrollment ID" },
         { key: "student_name", label: "Student Name" },
@@ -633,7 +583,6 @@ router.get(
       const escape = (val) => {
         if (val === null || val === undefined) return "";
         const str = String(val);
-        // Wrap in quotes jika ada koma, newline, atau double-quote
         if (str.includes(",") || str.includes("\n") || str.includes('"')) {
           return `"${str.replace(/"/g, '""')}"`;
         }
@@ -644,9 +593,7 @@ router.get(
       const csvRows = rows.map((row) =>
         COLUMNS.map((col) => {
           let val = row[col.key];
-          // Format boolean sebagai Yes/No
           if (typeof val === "boolean") val = val ? "Yes" : "No";
-          // Format tanggal ke ISO string tanpa milliseconds
           if (val instanceof Date)
             val = val.toISOString().replace("T", " ").split(".")[0];
           return escape(val);

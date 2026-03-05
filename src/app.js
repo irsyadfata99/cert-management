@@ -111,22 +111,6 @@ app.use("/api/admin", require("./routes/admin"));
 app.use("/api/teacher", require("./routes/teacher"));
 app.use("/api/drive", require("./routes/drive"));
 
-// ============================================================
-// TEST-ONLY ROUTE — inject session tanpa Google OAuth
-//
-// [FIX] Route ini HARUS berada di sini, sebelum 404 handler.
-//
-// Bug sebelumnya: route didaftarkan di testApp.js SETELAH
-// require("../../../src/app") — tapi saat require() dijalankan,
-// seluruh app.js sudah dieksekusi termasuk 404 handler.
-// Express mendaftarkan middleware secara berurutan, sehingga
-// request ke /__test/login selalu ditangkap 404 handler duluan
-// → loginAs() selalu dapat 404 → semua test dapat 401.
-//
-// Solusi: daftarkan route di sini, di dalam blok NODE_ENV === "test",
-// sehingga tidak ada overhead di production/development.
-// ============================================================
-
 if (process.env.NODE_ENV === "test") {
   const { query } = require("./config/database");
 
@@ -160,10 +144,6 @@ if (process.env.NODE_ENV === "test") {
   });
 }
 
-// ============================================================
-// 404 HANDLER
-// ============================================================
-
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -171,11 +151,6 @@ app.use((req, res) => {
   });
 });
 
-// ============================================================
-// GLOBAL ERROR HANDLER
-// ============================================================
-
-// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   const status = err.status || err.statusCode || 500;
   const isDev = process.env.NODE_ENV === "development";

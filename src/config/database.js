@@ -12,7 +12,6 @@ const pool = new Pool({
   connectionTimeoutMillis: 10000,
 });
 
-// Test koneksi saat server start — SKIP jika test environment
 if (process.env.NODE_ENV !== "test") {
   pool.connect((err, client, release) => {
     if (err) {

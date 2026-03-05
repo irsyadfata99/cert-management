@@ -2,7 +2,13 @@ const express = require("express");
 const multer = require("multer");
 const { isAuthenticated, authorize } = require("../middleware/authorize");
 const { apiLimiter, uploadLimiter } = require("../middleware/rateLimiter");
-const { validate, addStockBody, transferStockBody, updateThresholdBody, idParam } = require("../validators");
+const {
+  validate,
+  addStockBody,
+  transferStockBody,
+  updateThresholdBody,
+  idParam,
+} = require("../validators");
 const stockService = require("../services/stockService");
 const driveService = require("../services/driveService");
 const { query } = require("../config/database");
@@ -12,10 +18,6 @@ const router = express.Router();
 
 router.use(isAuthenticated);
 router.use(apiLimiter);
-
-// ============================================================
-// MULTER CONFIG
-// ============================================================
 
 const ALLOWED_SCAN_TYPES = ["image/jpeg", "image/png", "application/pdf"];
 const ALLOWED_REPORT_TYPES = ["application/pdf"];
@@ -47,114 +49,140 @@ const reportUpload = multer({
   },
 });
 
-// ============================================================
-// MULTER ERROR HANDLER
-// ============================================================
-
 const handleMulterError = (err, req, res, next) => {
-  if (err instanceof multer.MulterError || err.message?.includes("Invalid file type")) {
+  if (
+    err instanceof multer.MulterError ||
+    err.message?.includes("Invalid file type")
+  ) {
     return res.status(400).json({ success: false, message: err.message });
   }
   next(err);
 };
 
-// ============================================================
-// STOCK
-// ============================================================
+router.get(
+  "/stock",
+  authorize("admin", "super_admin"),
+  async (req, res, next) => {
+    try {
+      if (req.user.role === "super_admin") {
+        const data = await stockService.getAllStock();
+        return res.status(200).json({ success: true, data });
+      }
 
-// GET /api/drive/stock
-// Admin: return stock center sendiri
-// Super Admin: return semua stock
-router.get("/stock", authorize("admin", "super_admin"), async (req, res, next) => {
-  try {
-    if (req.user.role === "super_admin") {
-      const data = await stockService.getAllStock();
-      return res.status(200).json({ success: true, data });
+      const data = await stockService.getStockByCenter(req.user.center_id);
+      res.status(200).json({ success: true, data });
+    } catch (err) {
+      if (err.status)
+        return res
+          .status(err.status)
+          .json({ success: false, message: err.message });
+      next(err);
     }
+  },
+);
 
-    const data = await stockService.getStockByCenter(req.user.center_id);
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    if (err.status) return res.status(err.status).json({ success: false, message: err.message });
-    next(err);
-  }
-});
+router.post(
+  "/stock/add",
+  authorize("admin", "super_admin"),
+  validate(addStockBody),
+  async (req, res, next) => {
+    try {
+      const { type, quantity, center_id } = req.body;
+      const centerId =
+        req.user.role === "super_admin" ? center_id : req.user.center_id;
 
-// POST /api/drive/stock/add
-router.post("/stock/add", authorize("admin", "super_admin"), validate(addStockBody), async (req, res, next) => {
-  try {
-    const { type, quantity, center_id } = req.body;
-    const centerId = req.user.role === "super_admin" ? center_id : req.user.center_id;
+      if (!centerId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "center_id is required" });
+      }
 
-    if (!centerId) {
-      return res.status(400).json({ success: false, message: "center_id is required" });
+      const data = await stockService.addStock({
+        centerId,
+        type,
+        quantity,
+        addedBy: req.user.id,
+      });
+
+      logger.info("Stock added via API", {
+        centerId,
+        type,
+        quantity,
+        addedBy: req.user.id,
+      });
+
+      res.status(200).json({ success: true, data });
+    } catch (err) {
+      if (err.status)
+        return res
+          .status(err.status)
+          .json({ success: false, message: err.message });
+      next(err);
     }
+  },
+);
 
-    const data = await stockService.addStock({
-      centerId,
-      type,
-      quantity,
-      addedBy: req.user.id,
-    });
+router.post(
+  "/stock/transfer",
+  authorize("super_admin"),
+  validate(transferStockBody),
+  async (req, res, next) => {
+    try {
+      const { type, from_center_id, to_center_id, quantity } = req.body;
 
-    logger.info("Stock added via API", { centerId, type, quantity, addedBy: req.user.id });
+      const data = await stockService.transferStock({
+        type,
+        fromCenterId: from_center_id,
+        toCenterId: to_center_id,
+        quantity,
+        transferredBy: req.user.id,
+      });
 
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    if (err.status) return res.status(err.status).json({ success: false, message: err.message });
-    next(err);
-  }
-});
-
-// POST /api/drive/stock/transfer — super_admin only
-router.post("/stock/transfer", authorize("super_admin"), validate(transferStockBody), async (req, res, next) => {
-  try {
-    const { type, from_center_id, to_center_id, quantity } = req.body;
-
-    const data = await stockService.transferStock({
-      type,
-      fromCenterId: from_center_id,
-      toCenterId: to_center_id,
-      quantity,
-      transferredBy: req.user.id,
-    });
-
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    if (err.status) return res.status(err.status).json({ success: false, message: err.message });
-    next(err);
-  }
-});
-
-// PATCH /api/drive/stock/threshold
-router.patch("/stock/threshold", authorize("admin", "super_admin"), validate(updateThresholdBody), async (req, res, next) => {
-  try {
-    const { type, threshold, center_id } = req.body;
-    const centerId = req.user.role === "super_admin" ? center_id : req.user.center_id;
-
-    if (!centerId) {
-      return res.status(400).json({ success: false, message: "center_id is required" });
+      res.status(200).json({ success: true, data });
+    } catch (err) {
+      if (err.status)
+        return res
+          .status(err.status)
+          .json({ success: false, message: err.message });
+      next(err);
     }
+  },
+);
 
-    const data = await stockService.updateThreshold({
-      centerId,
-      type,
-      threshold,
-      updatedBy: req.user.id,
-    });
+router.patch(
+  "/stock/threshold",
+  authorize("admin", "super_admin"),
+  validate(updateThresholdBody),
+  async (req, res, next) => {
+    try {
+      const { type, threshold, center_id } = req.body;
+      const centerId =
+        req.user.role === "super_admin" ? center_id : req.user.center_id;
 
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    if (err.status) return res.status(err.status).json({ success: false, message: err.message });
-    next(err);
-  }
-});
+      if (!centerId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "center_id is required" });
+      }
 
-// ============================================================
-// CERTIFICATE SCAN UPLOAD — Teacher only
-// ============================================================
+      const data = await stockService.updateThreshold({
+        centerId,
+        type,
+        threshold,
+        updatedBy: req.user.id,
+      });
 
-// POST /api/drive/certificates/:id/scan
+      res.status(200).json({ success: true, data });
+    } catch (err) {
+      if (err.status)
+        return res
+          .status(err.status)
+          .json({ success: false, message: err.message });
+      next(err);
+    }
+  },
+);
+
 router.post(
   "/certificates/:id/scan",
   authorize("teacher"),
@@ -169,7 +197,9 @@ router.post(
   async (req, res, next) => {
     try {
       if (!req.file) {
-        return res.status(400).json({ success: false, message: "No file uploaded" });
+        return res
+          .status(400)
+          .json({ success: false, message: "No file uploaded" });
       }
 
       const certId = parseInt(req.params.id);
@@ -248,11 +278,6 @@ router.post(
   },
 );
 
-// ============================================================
-// REPORT MANUAL UPLOAD — Teacher only
-// ============================================================
-
-// POST /api/drive/reports/:id/upload
 router.post(
   "/reports/:id/upload",
   authorize("teacher"),
@@ -267,14 +292,15 @@ router.post(
   async (req, res, next) => {
     try {
       if (!req.file) {
-        return res.status(400).json({ success: false, message: "No file uploaded" });
+        return res
+          .status(400)
+          .json({ success: false, message: "No file uploaded" });
       }
 
       const reportId = parseInt(req.params.id);
       const teacherId = req.user.id;
       const driveFolderId = req.user.drive_folder_id;
 
-      // Validasi report milik teacher ini
       const reportCheck = await query(
         `SELECT r.id, r.drive_file_id, s.name AS student_name
          FROM reports r
@@ -325,7 +351,11 @@ router.post(
         [fileId, uploadedName, reportId],
       );
 
-      logger.info("Report manually uploaded to Drive", { reportId, fileId, teacherId });
+      logger.info("Report manually uploaded to Drive", {
+        reportId,
+        fileId,
+        teacherId,
+      });
 
       res.status(200).json({
         success: true,

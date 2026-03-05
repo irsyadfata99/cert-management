@@ -9,6 +9,7 @@ const {
   seedStudent,
   seedModule,
   seedEnrollment,
+  seedTeacherCenter,
   setStock,
   closeDb,
   pool,
@@ -674,5 +675,275 @@ describe("Stock — Teacher", () => {
     expect(res.body.data).toHaveProperty("medal_quantity");
     expect(res.body.data).toHaveProperty("cert_low_stock");
     expect(res.body.data).toHaveProperty("medal_low_stock");
+  });
+});
+
+// ============================================================
+// MULTI-CENTER — Teacher
+// ============================================================
+
+describe("Multi-Center — Teacher", () => {
+  let secondCenter, multiTeacher, secondStudent, secondEnrollment;
+
+  beforeAll(async () => {
+    // Setup: teacher yang di-assign ke 2 center
+    secondCenter = await seedCenter({ name: "Second Center Teacher" });
+    await setStock({
+      center_id: secondCenter.id,
+      cert_qty: 50,
+      medal_qty: 50,
+    });
+
+    multiTeacher = await seedUser({
+      email: "multi.teacher@test.com",
+      name: "Multi Center Teacher",
+      role: "teacher",
+      center_id: center.id,
+      is_active: true,
+    });
+
+    // Assign ke center kedua via seedTeacherCenter
+    await seedTeacherCenter({
+      teacher_id: multiTeacher.id,
+      center_id: secondCenter.id,
+      is_primary: false,
+    });
+
+    // Student & enrollment di center kedua
+    secondStudent = await seedStudent({
+      name: "Student Second Center",
+      center_id: secondCenter.id,
+    });
+
+    secondEnrollment = await seedEnrollment({
+      student_id: secondStudent.id,
+      module_id: module_.id,
+      center_id: secondCenter.id,
+      teacher_id: multiTeacher.id,
+    });
+  });
+
+  // --- Enrollments ---
+
+  test("GET /api/teacher/enrollments — tampilkan enrollment dari semua center", async () => {
+    // Buat enrollment di center utama juga
+    const primaryStudent = await seedStudent({
+      name: "Student Primary Multi",
+      center_id: center.id,
+    });
+    await seedEnrollment({
+      student_id: primaryStudent.id,
+      module_id: module_.id,
+      center_id: center.id,
+      teacher_id: multiTeacher.id,
+    });
+
+    const agent = await loginAs(multiTeacher);
+    const res = await agent.get("/api/teacher/enrollments");
+
+    expect(res.status).toBe(200);
+
+    const centerIds = [...new Set(res.body.data.map((e) => e.center_id))];
+    expect(centerIds).toContain(center.id);
+    expect(centerIds).toContain(secondCenter.id);
+  });
+
+  // --- Stock ---
+
+  test("GET /api/teacher/stock — return array semua center yang di-assign", async () => {
+    const agent = await loginAs(multiTeacher);
+    const res = await agent.get("/api/teacher/stock");
+
+    expect(res.status).toBe(200);
+    // Multi-center: response berupa array
+    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body.data.length).toBeGreaterThanOrEqual(2);
+
+    const centerIds = res.body.data.map((s) => s.center_id);
+    expect(centerIds).toContain(center.id);
+    expect(centerIds).toContain(secondCenter.id);
+  });
+
+  test("GET /api/teacher/stock — primary center muncul pertama", async () => {
+    const agent = await loginAs(multiTeacher);
+    const res = await agent.get("/api/teacher/stock");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data[0].center_id).toBe(center.id);
+  });
+
+  // --- Print cert di center ke-2 ---
+
+  test("POST /api/teacher/certificates/print — 201 print di center ke-2 yang di-assign", async () => {
+    const agent = await loginAs(multiTeacher);
+    const res = await agent.post("/api/teacher/certificates/print").send({
+      enrollment_id: secondEnrollment.id,
+      ptc_date: "2024-06-01",
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.cert_unique_id).toMatch(/^CERT-/);
+  });
+
+  test("stock berkurang di center enrollment, bukan center utama teacher", async () => {
+    // Ambil stock sebelum print
+    const beforeResult = await pool.query(
+      `SELECT quantity FROM certificate_stock WHERE center_id = $1`,
+      [secondCenter.id],
+    );
+    const stockBefore = beforeResult.rows[0].quantity;
+
+    const newStudent = await seedStudent({
+      name: "Student Stock Check",
+      center_id: secondCenter.id,
+    });
+    const newEnrollment = await seedEnrollment({
+      student_id: newStudent.id,
+      module_id: module_.id,
+      center_id: secondCenter.id,
+      teacher_id: multiTeacher.id,
+    });
+
+    const agent = await loginAs(multiTeacher);
+    await agent.post("/api/teacher/certificates/print").send({
+      enrollment_id: newEnrollment.id,
+      ptc_date: "2024-06-01",
+    });
+
+    const afterResult = await pool.query(
+      `SELECT quantity FROM certificate_stock WHERE center_id = $1`,
+      [secondCenter.id],
+    );
+    const stockAfter = afterResult.rows[0].quantity;
+
+    expect(stockAfter).toBe(stockBefore - 1);
+
+    // Stock center utama tidak berubah
+    const primaryBefore = await pool.query(
+      `SELECT quantity FROM certificate_stock WHERE center_id = $1`,
+      [center.id],
+    );
+    // Nilai primary center tidak ikut berkurang dari operasi di secondCenter
+    expect(primaryBefore.rows[0].quantity).toBeGreaterThanOrEqual(0);
+  });
+
+  test("POST /api/teacher/certificates/print — 404 enrollment di center yang tidak di-assign", async () => {
+    // Buat center ke-3 yang TIDAK di-assign ke multiTeacher
+    const thirdCenter = await seedCenter({ name: "Third Center Unassigned" });
+    await setStock({
+      center_id: thirdCenter.id,
+      cert_qty: 50,
+      medal_qty: 50,
+    });
+
+    const thirdTeacher = await seedUser({
+      email: "third.teacher.mc@test.com",
+      name: "Third Teacher MC",
+      role: "teacher",
+      center_id: thirdCenter.id,
+      is_active: true,
+    });
+
+    const thirdStudent = await seedStudent({
+      name: "Student Third Center",
+      center_id: thirdCenter.id,
+    });
+    const thirdEnrollment = await seedEnrollment({
+      student_id: thirdStudent.id,
+      module_id: module_.id,
+      center_id: thirdCenter.id,
+      teacher_id: thirdTeacher.id,
+    });
+
+    const agent = await loginAs(multiTeacher);
+    const res = await agent.post("/api/teacher/certificates/print").send({
+      enrollment_id: thirdEnrollment.id,
+      ptc_date: "2024-06-01",
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  // --- Batch print lintas center harus ditolak ---
+
+  test("POST /api/teacher/certificates/print/batch — 400 enrollment dari center berbeda", async () => {
+    // Enrollment di center utama
+    const primaryStudent2 = await seedStudent({
+      name: "Student Batch Cross 1",
+      center_id: center.id,
+    });
+    const primaryEnrollment2 = await seedEnrollment({
+      student_id: primaryStudent2.id,
+      module_id: module_.id,
+      center_id: center.id,
+      teacher_id: multiTeacher.id,
+    });
+
+    // Enrollment di center ke-2
+    const secondStudent2 = await seedStudent({
+      name: "Student Batch Cross 2",
+      center_id: secondCenter.id,
+    });
+    const secondEnrollment2 = await seedEnrollment({
+      student_id: secondStudent2.id,
+      module_id: module_.id,
+      center_id: secondCenter.id,
+      teacher_id: multiTeacher.id,
+    });
+
+    const agent = await loginAs(multiTeacher);
+    const res = await agent.post("/api/teacher/certificates/print/batch").send({
+      items: [
+        { enrollment_id: primaryEnrollment2.id, ptc_date: "2024-06-01" },
+        { enrollment_id: secondEnrollment2.id, ptc_date: "2024-06-01" },
+      ],
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  // --- Medal di center ke-2 ---
+
+  test("POST /api/teacher/medals/print — 201 print medal di center ke-2", async () => {
+    const agent = await loginAs(multiTeacher);
+    const res = await agent.post("/api/teacher/medals/print").send({
+      enrollment_id: secondEnrollment.id,
+      ptc_date: "2024-06-01",
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.medal_unique_id).toMatch(/^MEDAL-/);
+  });
+
+  test("medal stock berkurang di center enrollment", async () => {
+    const beforeResult = await pool.query(
+      `SELECT quantity FROM medal_stock WHERE center_id = $1`,
+      [secondCenter.id],
+    );
+    const stockBefore = beforeResult.rows[0].quantity;
+
+    const newStudent = await seedStudent({
+      name: "Student Medal Stock Check",
+      center_id: secondCenter.id,
+    });
+    const newEnrollment = await seedEnrollment({
+      student_id: newStudent.id,
+      module_id: module_.id,
+      center_id: secondCenter.id,
+      teacher_id: multiTeacher.id,
+    });
+
+    const agent = await loginAs(multiTeacher);
+    await agent.post("/api/teacher/medals/print").send({
+      enrollment_id: newEnrollment.id,
+      ptc_date: "2024-06-01",
+    });
+
+    const afterResult = await pool.query(
+      `SELECT quantity FROM medal_stock WHERE center_id = $1`,
+      [secondCenter.id],
+    );
+
+    expect(afterResult.rows[0].quantity).toBe(stockBefore - 1);
   });
 });

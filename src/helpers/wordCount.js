@@ -1,11 +1,5 @@
 const { REPORT_MIN_WORD_COUNT } = require("../config/constants");
 
-/**
- * Hitung jumlah kata dalam string dan validasi minimum.
- *
- * @param {string} text
- * @returns {{ valid: boolean, count: number, min: number }}
- */
 const validateWordCount = (text) => {
   if (!text || typeof text !== "string") {
     return { valid: false, count: 0, min: REPORT_MIN_WORD_COUNT };

@@ -1,9 +1,5 @@
 const { z } = require("zod");
 
-// ============================================================
-// SHARED
-// ============================================================
-
 const idParam = z.object({
   id: z.string().regex(/^\d+$/, "ID must be a number"),
 });
@@ -17,7 +13,6 @@ const paginationQuery = z.object({
   is_active: z.enum(["true", "false"]).optional(),
 });
 
-// FIX: Zod v4 — gunakan z.union agar null dan undefined keduanya valid
 const scoreEnum = z
   .union([z.enum(["A+", "A", "B+", "B"]), z.null()])
   .optional();
@@ -25,10 +20,6 @@ const scoreEnum = z
 const ptcDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format");
-
-// ============================================================
-// SUPER ADMIN — Centers
-// ============================================================
 
 const createCenterBody = z.object({
   name: z.string().min(1, "Center name is required").max(255),
@@ -44,7 +35,6 @@ const updateCenterBody = z
     message: "At least one field (name or address) must be provided",
   });
 
-// SUPER ADMIN — Admins
 const createAdminBody = z.object({
   email: z.string().email("Invalid email format").max(255),
   name: z.string().min(1, "Name is required").max(255),
@@ -54,7 +44,6 @@ const createAdminBody = z.object({
     .positive(),
 });
 
-// [NEW] Update admin — name dan/atau email
 const updateAdminBody = z
   .object({
     name: z.string().min(1).max(255).optional(),
@@ -64,7 +53,6 @@ const updateAdminBody = z
     message: "At least one field (name or email) must be provided",
   });
 
-// SUPER ADMIN — Monitoring
 const monitoringUploadQuery = paginationQuery.extend({
   center_id: z.string().regex(/^\d+$/).optional(),
   status: z
@@ -95,10 +83,6 @@ const downloadEnrollmentsQuery = z.object({
     .optional(),
 });
 
-// ============================================================
-// ADMIN — Students
-// ============================================================
-
 const createStudentBody = z.object({
   name: z.string().min(1, "Student name is required").max(255),
   center_id: z.number().int().positive().optional(),
@@ -112,7 +96,6 @@ const listStudentsQuery = paginationQuery.extend({
   center_id: z.string().regex(/^\d+$/).optional(),
 });
 
-// ADMIN — Modules
 const createModuleBody = z.object({
   name: z.string().min(1, "Module name is required").max(255),
   description: z.string().max(1000).optional(),
@@ -127,15 +110,12 @@ const updateModuleBody = z
     message: "At least one field must be provided",
   });
 
-// ADMIN — Teachers
 const createTeacherBody = z.object({
   email: z.string().email("Invalid email format").max(255),
   name: z.string().min(1, "Name is required").max(255),
   center_id: z.number().int().positive().optional(),
 });
 
-// [NEW] Update teacher — hanya name dan email yang boleh diedit
-// center dikelola via assign/remove center endpoint
 const updateTeacherBody = z
   .object({
     name: z.string().min(1).max(255).optional(),
@@ -145,7 +125,6 @@ const updateTeacherBody = z
     message: "At least one field (name or email) must be provided",
   });
 
-// [NEW] Assign teacher ke center
 const assignTeacherCenterBody = z.object({
   center_id: z
     .number({ required_error: "center_id is required" })
@@ -158,7 +137,6 @@ const listTeachersQuery = paginationQuery.extend({
   center_id: z.string().regex(/^\d+$/).optional(),
 });
 
-// ADMIN — Enrollments
 const createEnrollmentBody = z.object({
   student_id: z
     .number({ required_error: "student_id is required" })
@@ -191,10 +169,6 @@ const migrateBody = z.object({
     .int()
     .positive(),
 });
-
-// ============================================================
-// TEACHER — Certificates
-// ============================================================
 
 const printCertBody = z.object({
   enrollment_id: z
@@ -229,7 +203,6 @@ const listCertsQuery = paginationQuery.extend({
   is_reprint: z.enum(["true", "false"]).optional(),
 });
 
-// TEACHER — Medals
 const printMedalBody = z.object({
   enrollment_id: z
     .number({ required_error: "enrollment_id is required" })
@@ -251,7 +224,6 @@ const printMedalBatchBody = z.object({
     .max(100, "Batch size cannot exceed 100"),
 });
 
-// TEACHER — Reports
 const createReportBody = z.object({
   enrollment_id: z
     .number({ required_error: "enrollment_id is required" })
@@ -281,10 +253,6 @@ const updateReportBody = z
   .refine((d) => Object.values(d).some((v) => v !== undefined), {
     message: "At least one field must be provided",
   });
-
-// ============================================================
-// DRIVE — Stock
-// ============================================================
 
 const addStockBody = z.object({
   center_id: z.number().int().positive().optional(),
@@ -326,10 +294,6 @@ const updateThresholdBody = z.object({
     .min(0, "Threshold must be >= 0"),
 });
 
-// ============================================================
-// MIDDLEWARE FACTORY
-// ============================================================
-
 const validate = (schema, target = "body") => {
   return (req, res, next) => {
     const result = schema.safeParse(req[target]);
@@ -356,7 +320,6 @@ const validate = (schema, target = "body") => {
 
 module.exports = {
   validate,
-  // Super Admin
   createCenterBody,
   updateCenterBody,
   createAdminBody,
@@ -364,7 +327,6 @@ module.exports = {
   monitoringUploadQuery,
   monitoringActivityQuery,
   downloadEnrollmentsQuery,
-  // Admin
   createStudentBody,
   updateStudentBody,
   listStudentsQuery,
@@ -377,7 +339,6 @@ module.exports = {
   createEnrollmentBody,
   listEnrollmentsQuery,
   migrateBody,
-  // Teacher
   printCertBody,
   printCertBatchBody,
   reprintCertBody,
@@ -386,11 +347,9 @@ module.exports = {
   printMedalBatchBody,
   createReportBody,
   updateReportBody,
-  // Drive / Stock
   addStockBody,
   transferStockBody,
   updateThresholdBody,
-  // Shared
   idParam,
   paginationQuery,
 };

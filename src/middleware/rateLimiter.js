@@ -1,10 +1,6 @@
 const rateLimit = require("express-rate-limit");
 const logger = require("../config/logger");
 
-// ============================================================
-// SHARED HANDLER
-// ============================================================
-
 const onLimitReached = (req, res, options) => {
   logger.warn("Rate limit exceeded", {
     ip: req.ip,
@@ -19,14 +15,6 @@ const onLimitReached = (req, res, options) => {
   });
 };
 
-// ============================================================
-// LIMITERS
-// ============================================================
-
-/**
- * Auth limiter — ketat, untuk mencegah brute force login.
- * 20 request per 15 menit per IP.
- */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
@@ -36,10 +24,6 @@ const authLimiter = rateLimit({
   handler: onLimitReached,
 });
 
-/**
- * API limiter — umum untuk semua endpoint API.
- * 100 request per menit per IP.
- */
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 100,
@@ -49,10 +33,6 @@ const apiLimiter = rateLimit({
   handler: onLimitReached,
 });
 
-/**
- * Upload limiter — untuk endpoint upload file ke Drive.
- * 30 request per menit per IP.
- */
 const uploadLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 30,
@@ -62,10 +42,6 @@ const uploadLimiter = rateLimit({
   handler: onLimitReached,
 });
 
-/**
- * Print limiter — untuk endpoint print certificate & medal.
- * 60 request per menit per IP.
- */
 const printLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 60,

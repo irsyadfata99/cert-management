@@ -4,17 +4,10 @@ const { query } = require("./database");
 const driveService = require("../services/driveService");
 const logger = require("./logger");
 
-// ============================================================
-// SERIALIZE / DESERIALIZE
-// ============================================================
-
 passport.serializeUser((user, done) => {
   done(null, user.id);
 });
 
-// Ambil full user dari DB — hanya dipanggil jika session.cachedUser kosong.
-// Setelah berhasil, simpan ke session.cachedUser agar request berikutnya
-// tidak perlu query DB (lihat middleware di app.js).
 passport.deserializeUser(async (id, done) => {
   try {
     const result = await query(
@@ -39,10 +32,6 @@ passport.deserializeUser(async (id, done) => {
     done(err, null);
   }
 });
-
-// ============================================================
-// GOOGLE STRATEGY
-// ============================================================
 
 passport.use(
   new GoogleStrategy(
@@ -77,9 +66,6 @@ passport.use(
 
         const user = existing.rows[0];
 
-        // ============================================================
-        // FIRST LOGIN: aktivasi akun & setup Drive folder (teacher)
-        // ============================================================
         if (!user.is_active) {
           let driveFolderId = user.drive_folder_id;
 
@@ -145,15 +131,10 @@ passport.use(
             is_active: true,
           };
 
-          // Simpan ke session cache
           if (req.session) req.session.cachedUser = activatedUser;
 
           return done(null, activatedUser);
         }
-
-        // ============================================================
-        // SUBSEQUENT LOGIN: update avatar jika berubah
-        // ============================================================
         const newAvatar = profile.photos?.[0]?.value ?? null;
         if (newAvatar !== user.avatar || !user.google_id) {
           await query(
@@ -167,8 +148,6 @@ passport.use(
         }
 
         const finalUser = { ...user, avatar: newAvatar };
-
-        // Simpan ke session cache
         if (req.session) req.session.cachedUser = finalUser;
 
         done(null, finalUser);

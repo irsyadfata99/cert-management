@@ -28,31 +28,13 @@ const router = express.Router();
 router.use(authorize("teacher"));
 router.use(apiLimiter);
 
-// ============================================================
-// HELPER
-// ============================================================
-
 const teacherContext = (req) => ({
   teacherId: req.user.id,
-  // center_id di sini adalah primary center teacher — dipakai sebagai
-  // default context. Untuk operasi lintas center (print cert untuk
-  // student di center lain), centerId diambil dari enrollment/student.
   centerId: req.user.center_id,
   driveFolderId: req.user.drive_folder_id,
   teacherName: req.user.name,
 });
 
-// ============================================================
-// [MULTI-CENTER] HELPER: Resolve center dari enrollment
-//
-// Sebelumnya: teacher hanya bisa akses enrollment di center-nya sendiri.
-// Sekarang: teacher bisa akses enrollment di semua center yang dia
-// di-assign, selama dia adalah teacher di enrollment tersebut.
-//
-// Fungsi ini mengambil center_id dari enrollment langsung,
-// sehingga stock yang berkurang dan cert yang ter-record adalah
-// dari center student — bukan center utama teacher.
-// ============================================================
 const resolveEnrollmentCenter = async (enrollmentId, teacherId) => {
   const result = await query(
     `SELECT e.center_id FROM enrollments e
@@ -65,12 +47,6 @@ const resolveEnrollmentCenter = async (enrollmentId, teacherId) => {
   return result.rows[0].center_id;
 };
 
-// ============================================================
-// ENROLLMENTS
-// ============================================================
-
-// GET /api/teacher/enrollments
-// Tampilkan semua enrollment dari semua center yang di-assign ke teacher ini
 router.get("/enrollments", async (req, res, next) => {
   try {
     const { teacherId } = teacherContext(req);
@@ -132,11 +108,6 @@ router.get("/enrollments", async (req, res, next) => {
   }
 });
 
-// ============================================================
-// CERTIFICATE — PRINT
-// ============================================================
-
-// POST /api/teacher/certificates/print
 router.post(
   "/certificates/print",
   printLimiter,
@@ -146,7 +117,6 @@ router.post(
       const { teacherId } = teacherContext(req);
       const { enrollment_id, ptc_date } = req.body;
 
-      // [MULTI-CENTER] Ambil center dari enrollment, bukan dari teacher.center_id
       const centerId = await resolveEnrollmentCenter(enrollment_id, teacherId);
       if (centerId === null) {
         return res.status(404).json({
@@ -173,12 +143,6 @@ router.post(
   },
 );
 
-// POST /api/teacher/certificates/print/batch
-// ============================================================
-// [MULTI-CENTER] Batch print mengharuskan semua enrollment dalam
-// satu batch berada di center yang sama. Jika enrollment berbeda
-// center, client harus split menjadi beberapa request per center.
-// ============================================================
 router.post(
   "/certificates/print/batch",
   printLimiter,
@@ -188,7 +152,6 @@ router.post(
       const { teacherId } = teacherContext(req);
       const { items } = req.body;
 
-      // Ambil center dari enrollment pertama sebagai referensi
       const centerId = await resolveEnrollmentCenter(
         items[0].enrollment_id,
         teacherId,
@@ -200,7 +163,6 @@ router.post(
         });
       }
 
-      // Validasi semua enrollment di center yang sama
       const enrollmentIds = items.map((i) => i.enrollment_id);
       const centerCheck = await query(
         `SELECT COUNT(*)::int AS total FROM enrollments
@@ -236,7 +198,6 @@ router.post(
   },
 );
 
-// POST /api/teacher/certificates/reprint
 router.post(
   "/certificates/reprint",
   printLimiter,
@@ -246,7 +207,6 @@ router.post(
       const { teacherId } = teacherContext(req);
       const { original_cert_id, ptc_date } = req.body;
 
-      // [MULTI-CENTER] Ambil center dari certificate yang akan di-reprint
       const certResult = await query(
         `SELECT c.center_id FROM certificates c
          JOIN enrollments e ON e.id = c.enrollment_id
@@ -281,8 +241,6 @@ router.post(
   },
 );
 
-// GET /api/teacher/certificates
-// Tampilkan cert dari semua center yang di-assign ke teacher
 router.get(
   "/certificates",
   validate(listCertsQuery, "query"),
@@ -297,7 +255,6 @@ router.get(
 
       const { rows, total } = await certificateService.getByTeacher({
         teacherId,
-        // [MULTI-CENTER] Tidak filter by centerId — teacher lihat semua centernya
         centerId: null,
         page,
         limit,
@@ -314,11 +271,6 @@ router.get(
   },
 );
 
-// ============================================================
-// MEDAL — PRINT
-// ============================================================
-
-// POST /api/teacher/medals/print
 router.post(
   "/medals/print",
   printLimiter,
@@ -354,7 +306,6 @@ router.post(
   },
 );
 
-// POST /api/teacher/medals/print/batch
 router.post(
   "/medals/print/batch",
   printLimiter,
@@ -375,7 +326,6 @@ router.post(
         });
       }
 
-      // Validasi semua enrollment di center yang sama
       const enrollmentIds = items.map((i) => i.enrollment_id);
       const centerCheck = await query(
         `SELECT COUNT(*)::int AS total FROM enrollments
@@ -411,7 +361,6 @@ router.post(
   },
 );
 
-// GET /api/teacher/medals
 router.get("/medals", async (req, res, next) => {
   try {
     const { teacherId } = teacherContext(req);
@@ -419,7 +368,7 @@ router.get("/medals", async (req, res, next) => {
 
     const { rows, total } = await medalService.getByTeacher({
       teacherId,
-      centerId: null, // [MULTI-CENTER] Semua center
+      centerId: null,
       limit,
       offset,
     });
@@ -432,11 +381,6 @@ router.get("/medals", async (req, res, next) => {
   }
 });
 
-// ============================================================
-// REPORTS
-// ============================================================
-
-// GET /api/teacher/reports
 router.get("/reports", async (req, res, next) => {
   try {
     const { teacherId } = teacherContext(req);
@@ -483,7 +427,6 @@ router.get("/reports", async (req, res, next) => {
   }
 });
 
-// POST /api/teacher/reports
 router.post("/reports", validate(createReportBody), async (req, res, next) => {
   try {
     const { teacherId, driveFolderId, teacherName } = teacherContext(req);
@@ -499,7 +442,6 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
       score_coding_skills,
     } = req.body;
 
-    // 1. Validasi enrollment — teacher harus di-assign ke center enrollment ini
     const enrollment = await query(
       `SELECT e.id, s.name AS student_name
        FROM enrollments e
@@ -523,7 +465,6 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
 
     const { student_name: studentName } = enrollment.rows[0];
 
-    // 2. Cek scan certificate sudah di-upload
     const scanCheck = await query(
       `SELECT id FROM certificates WHERE enrollment_id = $1 AND scan_file_id IS NOT NULL LIMIT 1`,
       [enrollment_id],
@@ -536,7 +477,6 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
       });
     }
 
-    // 3. Cek report sudah ada
     const existingReport = await query(
       `SELECT id FROM reports WHERE enrollment_id = $1`,
       [enrollment_id],
@@ -549,7 +489,6 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
       });
     }
 
-    // 4. Validasi word count min 200
     const wordCountResult = validateWordCount(content);
     if (!wordCountResult.valid) {
       return res.status(400).json({
@@ -558,7 +497,6 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
       });
     }
 
-    // 5. Insert report ke DB
     const result = await query(
       `INSERT INTO reports (
          enrollment_id, teacher_id, academic_year, period,
@@ -592,7 +530,6 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
       wordCount: wordCountResult.count,
     });
 
-    // 6. AUTO GENERATE PDF + UPLOAD KE DRIVE
     if (!driveFolderId) {
       logger.warn("Auto upload skipped: teacher has no Drive folder", {
         teacherId,
@@ -675,7 +612,6 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
   }
 });
 
-// PATCH /api/teacher/reports/:id
 router.patch(
   "/reports/:id",
   validate(idParam, "params"),
@@ -749,12 +685,10 @@ router.patch(
       });
 
       if (Object.keys(dirtyFields).length === 0) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "At least one field must be provided",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "At least one field must be provided",
+        });
       }
 
       const { setClause, values, nextIndex } = buildSet(dirtyFields);
@@ -874,12 +808,6 @@ router.patch(
   },
 );
 
-// ============================================================
-// STOCK INFO (read-only)
-// ============================================================
-
-// GET /api/teacher/stock
-// [MULTI-CENTER] Tampilkan stock semua center yang di-assign ke teacher
 router.get("/stock", async (req, res, next) => {
   try {
     const { teacherId } = teacherContext(req);

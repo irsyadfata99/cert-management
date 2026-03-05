@@ -6,11 +6,6 @@ const logger = require("../config/logger");
 
 const router = express.Router();
 
-// ============================================================
-// GOOGLE OAUTH
-// ============================================================
-
-// Redirect ke Google consent screen
 router.get(
   "/google",
   authLimiter,
@@ -20,7 +15,6 @@ router.get(
   }),
 );
 
-// Callback dari Google setelah user login
 router.get(
   "/google/callback",
   authLimiter,
@@ -39,13 +33,9 @@ router.get(
   },
 );
 
-// ============================================================
-// SESSION
-// ============================================================
-
-// Cek status session — dipakai frontend untuk restore auth state
 router.get("/me", isAuthenticated, (req, res) => {
-  const { id, email, name, avatar, role, center_id, drive_folder_id } = req.user;
+  const { id, email, name, avatar, role, center_id, drive_folder_id } =
+    req.user;
 
   res.status(200).json({
     success: true,
@@ -53,7 +43,6 @@ router.get("/me", isAuthenticated, (req, res) => {
   });
 });
 
-// Logout
 router.post("/logout", isAuthenticated, (req, res, next) => {
   const { id, email, role } = req.user;
 
@@ -65,7 +54,10 @@ router.post("/logout", isAuthenticated, (req, res, next) => {
 
     req.session.destroy((err) => {
       if (err) {
-        logger.error("Session destroy error", { userId: id, error: err.message });
+        logger.error("Session destroy error", {
+          userId: id,
+          error: err.message,
+        });
         return next(err);
       }
 

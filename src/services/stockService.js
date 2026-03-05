@@ -1,14 +1,6 @@
 const { query } = require("../config/database");
 const logger = require("../config/logger");
 
-// ============================================================
-// HELPERS
-// ============================================================
-
-/**
- * Normalize error dari DB function fn_transfer_stock agar
- * pesan internal (bahasa Indonesia) tidak bocor ke client.
- */
 const normalizeTransferError = (err) => {
   const msg = err.message ?? "";
 
@@ -55,10 +47,6 @@ const normalizeTransferError = (err) => {
   return err;
 };
 
-// ============================================================
-// GET STOCK
-// ============================================================
-
 const getStockByCenter = async (centerId) => {
   const result = await query(
     `SELECT
@@ -89,10 +77,6 @@ const getAllStock = async () => {
   );
   return result.rows;
 };
-
-// ============================================================
-// ADD STOCK
-// ============================================================
 
 const addStock = async ({ centerId, type, quantity, addedBy }) => {
   if (!["certificate", "medal"].includes(type)) {
@@ -133,10 +117,6 @@ const addStock = async ({ centerId, type, quantity, addedBy }) => {
     low_stock: result.rows[0].quantity <= result.rows[0].low_stock_threshold,
   };
 };
-
-// ============================================================
-// UPDATE THRESHOLD
-// ============================================================
 
 const updateThreshold = async ({ centerId, type, threshold, updatedBy }) => {
   if (!["certificate", "medal"].includes(type)) {
@@ -181,10 +161,6 @@ const updateThreshold = async ({ centerId, type, threshold, updatedBy }) => {
     low_stock_threshold: result.rows[0].low_stock_threshold,
   };
 };
-
-// ============================================================
-// TRANSFER STOCK
-// ============================================================
 
 const transferStock = async ({
   type,

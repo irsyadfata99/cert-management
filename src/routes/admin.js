@@ -32,10 +32,6 @@ const router = express.Router();
 router.use(authorize("admin", "super_admin"));
 router.use(apiLimiter);
 
-// ============================================================
-// HELPER: resolve center_id berdasarkan role
-// ============================================================
-
 const resolveCenterId = (req, paramCenterId) => {
   if (req.user.role === "super_admin") {
     return paramCenterId ? parseInt(paramCenterId) : undefined;
@@ -43,11 +39,6 @@ const resolveCenterId = (req, paramCenterId) => {
   return req.user.center_id;
 };
 
-// ============================================================
-// STUDENTS
-// ============================================================
-
-// GET /api/admin/students
 router.get(
   "/students",
   validate(listStudentsQuery, "query"),
@@ -110,7 +101,6 @@ router.get(
   },
 );
 
-// GET /api/admin/students/:id
 router.get(
   "/students/:id",
   validate(idParam, "params"),
@@ -139,7 +129,6 @@ router.get(
   },
 );
 
-// POST /api/admin/students
 router.post(
   "/students",
   validate(createStudentBody),
@@ -186,7 +175,6 @@ router.post(
   },
 );
 
-// PATCH /api/admin/students/:id
 router.patch(
   "/students/:id",
   validate(idParam, "params"),
@@ -221,7 +209,6 @@ router.patch(
   },
 );
 
-// PATCH /api/admin/students/:id/deactivate
 router.patch(
   "/students/:id/deactivate",
   validate(idParam, "params"),
@@ -238,35 +225,26 @@ router.patch(
       );
 
       if (result.rows.length === 0) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message: "Student not found or already inactive",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Student not found or already inactive",
+        });
       }
 
       logger.info("Student deactivated", {
         studentId: req.params.id,
         deactivatedBy: req.user.id,
       });
-      res
-        .status(200)
-        .json({
-          success: true,
-          message: `Student "${result.rows[0].name}" deactivated`,
-        });
+      res.status(200).json({
+        success: true,
+        message: `Student "${result.rows[0].name}" deactivated`,
+      });
     } catch (err) {
       next(err);
     }
   },
 );
 
-// ============================================================
-// MODULES
-// ============================================================
-
-// GET /api/admin/modules
 router.get(
   "/modules",
   validate(paginationQuery, "query"),
@@ -324,7 +302,6 @@ router.get(
   },
 );
 
-// POST /api/admin/modules
 router.post("/modules", validate(createModuleBody), async (req, res, next) => {
   try {
     const { name, description } = req.body;
@@ -347,7 +324,6 @@ router.post("/modules", validate(createModuleBody), async (req, res, next) => {
   }
 });
 
-// PATCH /api/admin/modules/:id
 router.patch(
   "/modules/:id",
   validate(idParam, "params"),
@@ -386,7 +362,6 @@ router.patch(
   },
 );
 
-// PATCH /api/admin/modules/:id/deactivate
 router.patch(
   "/modules/:id/deactivate",
   validate(idParam, "params"),
@@ -400,35 +375,26 @@ router.patch(
       );
 
       if (result.rows.length === 0) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message: "Module not found or already inactive",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Module not found or already inactive",
+        });
       }
 
       logger.info("Module deactivated", {
         moduleId: req.params.id,
         deactivatedBy: req.user.id,
       });
-      res
-        .status(200)
-        .json({
-          success: true,
-          message: `Module "${result.rows[0].name}" deactivated`,
-        });
+      res.status(200).json({
+        success: true,
+        message: `Module "${result.rows[0].name}" deactivated`,
+      });
     } catch (err) {
       next(err);
     }
   },
 );
 
-// ============================================================
-// TEACHERS
-// ============================================================
-
-// GET /api/admin/teachers
 router.get(
   "/teachers",
   validate(listTeachersQuery, "query"),
@@ -437,12 +403,6 @@ router.get(
       const centerId = resolveCenterId(req, req.query.center_id);
       const { page, limit, offset } = parsePagination(req.query);
 
-      // ============================================================
-      // [MULTI-CENTER] Filter teacher berdasarkan center via teacher_centers.
-      // Sebelumnya: WHERE u.center_id = $x (hanya primary center)
-      // Sekarang: JOIN teacher_centers agar teacher yang di-assign
-      // ke center ini (meski bukan primary) juga muncul.
-      // ============================================================
       const { whereClause, values } = buildWhere([
         { col: "u.role", val: "teacher" },
         {
@@ -491,7 +451,6 @@ router.get(
         query(`SELECT COUNT(*)::int AS total ${baseQuery}`, values),
       ]);
 
-      // Sertakan daftar centers untuk setiap teacher
       const teacherIds = dataResult.rows.map((t) => t.id);
       let centersMap = {};
 
@@ -530,7 +489,6 @@ router.get(
   },
 );
 
-// POST /api/admin/teachers
 router.post(
   "/teachers",
   validate(createTeacherBody),
@@ -573,7 +531,6 @@ router.post(
 
         const teacher = userResult.rows[0];
 
-        // Insert ke teacher_centers sebagai primary center
         await client.query(
           `INSERT INTO teacher_centers (teacher_id, center_id, is_primary)
          VALUES ($1, $2, TRUE)
@@ -602,15 +559,6 @@ router.post(
   },
 );
 
-// PATCH /api/admin/teachers/:id — update nama/email teacher
-// ============================================================
-// [NEW] Endpoint untuk edit data teacher.
-// - name dan email bisa diupdate
-// - Jika email berubah, google_id & avatar di-reset agar teacher
-//   login ulang via Google dengan email baru
-// - center_id (primary) tidak bisa diubah via endpoint ini —
-//   gunakan assign/remove center endpoint
-// ============================================================
 router.patch(
   "/teachers/:id",
   validate(idParam, "params"),
@@ -620,7 +568,6 @@ router.patch(
       const { name, email } = req.body;
       const centerId = resolveCenterId(req, null);
 
-      // Pastikan teacher ini ada dan dalam center yang benar
       const teacherCheck = await query(
         `SELECT u.id, u.email FROM users u
        WHERE u.id = $1 AND u.role = 'teacher'
@@ -636,38 +583,32 @@ router.patch(
       );
 
       if (teacherCheck.rows.length === 0) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message: "Teacher not found or not in your center",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Teacher not found or not in your center",
+        });
       }
 
       const currentTeacher = teacherCheck.rows[0];
       const emailChanged =
         email && email.toLowerCase() !== currentTeacher.email;
 
-      // Jika email berubah, cek tidak konflik dengan user lain
       if (emailChanged) {
         const emailConflict = await query(
           `SELECT id FROM users WHERE email = $1 AND id != $2`,
           [email.toLowerCase(), req.params.id],
         );
         if (emailConflict.rows.length > 0) {
-          return res
-            .status(409)
-            .json({
-              success: false,
-              message: "Email already used by another user",
-            });
+          return res.status(409).json({
+            success: false,
+            message: "Email already used by another user",
+          });
         }
       }
 
       const fields = {};
       if (name) fields.name = name;
       if (email) fields.email = email.toLowerCase();
-      // Reset google_id & avatar jika email berubah — paksa login ulang
       if (emailChanged) {
         fields.google_id = null;
         fields.avatar = null;
@@ -703,12 +644,6 @@ router.patch(
   },
 );
 
-// POST /api/admin/teachers/:id/centers — assign teacher ke center tambahan
-// ============================================================
-// [NEW] Assign teacher ke center baru (non-primary).
-// Admin hanya bisa assign ke center miliknya sendiri.
-// Super admin bisa assign ke center manapun.
-// ============================================================
 router.post(
   "/teachers/:id/centers",
   validate(idParam, "params"),
@@ -718,7 +653,6 @@ router.post(
       const { center_id, is_primary } = req.body;
       const adminCenterId = resolveCenterId(req, null);
 
-      // Admin hanya boleh assign teacher ke center miliknya
       if (adminCenterId && center_id !== adminCenterId) {
         return res.status(403).json({
           success: false,
@@ -726,7 +660,6 @@ router.post(
         });
       }
 
-      // Validasi teacher ada
       const teacherCheck = await query(
         `SELECT id FROM users WHERE id = $1 AND role = 'teacher'`,
         [req.params.id],
@@ -737,7 +670,6 @@ router.post(
           .json({ success: false, message: "Teacher not found" });
       }
 
-      // Validasi center ada
       const centerCheck = await query(
         `SELECT id FROM centers WHERE id = $1 AND is_active = TRUE`,
         [center_id],
@@ -749,14 +681,12 @@ router.post(
       }
 
       const result = await withTransaction(async (client) => {
-        // Jika set sebagai primary, lepas primary dari center lama
         if (is_primary) {
           await client.query(
             `UPDATE teacher_centers SET is_primary = FALSE
            WHERE teacher_id = $1 AND is_primary = TRUE`,
             [req.params.id],
           );
-          // Update users.center_id agar tetap sinkron
           await client.query(
             `UPDATE users SET center_id = $1, updated_at = NOW() WHERE id = $2`,
             [center_id, req.params.id],
@@ -789,20 +719,12 @@ router.post(
   },
 );
 
-// DELETE /api/admin/teachers/:id/centers/:centerId — remove teacher dari center
-// ============================================================
-// [NEW] Lepas teacher dari center tertentu.
-// Tidak bisa menghapus satu-satunya center teacher.
-// Jika center yang dihapus adalah primary, center lain yang
-// paling lama di-assign akan dijadikan primary baru.
-// ============================================================
 router.delete("/teachers/:id/centers/:centerId", async (req, res, next) => {
   try {
     const teacherId = parseInt(req.params.id);
     const centerId = parseInt(req.params.centerId);
     const adminCenterId = resolveCenterId(req, null);
 
-    // Admin hanya boleh melepas center miliknya
     if (adminCenterId && centerId !== adminCenterId) {
       return res.status(403).json({
         success: false,
@@ -810,7 +732,6 @@ router.delete("/teachers/:id/centers/:centerId", async (req, res, next) => {
       });
     }
 
-    // Cek assignment ini ada
     const assignCheck = await query(
       `SELECT teacher_id, center_id, is_primary FROM teacher_centers
        WHERE teacher_id = $1 AND center_id = $2`,
@@ -824,7 +745,6 @@ router.delete("/teachers/:id/centers/:centerId", async (req, res, next) => {
       });
     }
 
-    // Hitung total center yang dimiliki teacher ini
     const countResult = await query(
       `SELECT COUNT(*)::int AS total FROM teacher_centers WHERE teacher_id = $1`,
       [teacherId],
@@ -841,13 +761,11 @@ router.delete("/teachers/:id/centers/:centerId", async (req, res, next) => {
     const isPrimary = assignCheck.rows[0].is_primary;
 
     await withTransaction(async (client) => {
-      // Hapus assignment
       await client.query(
         `DELETE FROM teacher_centers WHERE teacher_id = $1 AND center_id = $2`,
         [teacherId, centerId],
       );
 
-      // Jika center yang dihapus adalah primary, promote center lain
       if (isPrimary) {
         const newPrimary = await client.query(
           `UPDATE teacher_centers
@@ -863,7 +781,6 @@ router.delete("/teachers/:id/centers/:centerId", async (req, res, next) => {
           [teacherId],
         );
 
-        // Sync users.center_id dengan primary baru
         if (newPrimary.rows.length > 0) {
           await client.query(
             `UPDATE users SET center_id = $1, updated_at = NOW() WHERE id = $2`,
@@ -892,7 +809,6 @@ router.delete("/teachers/:id/centers/:centerId", async (req, res, next) => {
   }
 });
 
-// GET /api/admin/teachers/:id/centers — list semua center milik teacher
 router.get(
   "/teachers/:id/centers",
   validate(idParam, "params"),
@@ -901,19 +817,16 @@ router.get(
       const teacherId = parseInt(req.params.id);
       const adminCenterId = resolveCenterId(req, null);
 
-      // Admin hanya bisa lihat teacher dalam centernya
       if (adminCenterId) {
         const accessCheck = await query(
           `SELECT 1 FROM teacher_centers WHERE teacher_id = $1 AND center_id = $2`,
           [teacherId, adminCenterId],
         );
         if (accessCheck.rows.length === 0) {
-          return res
-            .status(404)
-            .json({
-              success: false,
-              message: "Teacher not found in your center",
-            });
+          return res.status(404).json({
+            success: false,
+            message: "Teacher not found in your center",
+          });
         }
       }
 
@@ -933,7 +846,6 @@ router.get(
   },
 );
 
-// PATCH /api/admin/teachers/:id/deactivate
 router.patch(
   "/teachers/:id/deactivate",
   validate(idParam, "params"),
@@ -958,35 +870,26 @@ router.patch(
       );
 
       if (result.rows.length === 0) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message: "Teacher not found or already inactive",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Teacher not found or already inactive",
+        });
       }
 
       logger.info("Teacher deactivated", {
         teacherId: req.params.id,
         deactivatedBy: req.user.id,
       });
-      res
-        .status(200)
-        .json({
-          success: true,
-          message: `Teacher "${result.rows[0].name}" deactivated`,
-        });
+      res.status(200).json({
+        success: true,
+        message: `Teacher "${result.rows[0].name}" deactivated`,
+      });
     } catch (err) {
       next(err);
     }
   },
 );
 
-// ============================================================
-// ENROLLMENTS
-// ============================================================
-
-// GET /api/admin/enrollments
 router.get(
   "/enrollments",
   validate(listEnrollmentsQuery, "query"),
@@ -1058,12 +961,6 @@ router.get(
   },
 );
 
-// POST /api/admin/enrollments
-// ============================================================
-// [MULTI-CENTER] Validasi teacher sekarang menggunakan teacher_centers,
-// bukan users.center_id. Teacher boleh mengajar di center manapun
-// yang sudah di-assign ke dia, tidak harus center utamanya.
-// ============================================================
 router.post(
   "/enrollments",
   validate(createEnrollmentBody),
@@ -1086,7 +983,6 @@ router.post(
            FOR SHARE`,
             [module_id],
           ),
-          // [MULTI-CENTER] Cek via teacher_centers, bukan users.center_id
           client.query(
             `SELECT u.id FROM users u
            JOIN teacher_centers tc ON tc.teacher_id = u.id
@@ -1140,19 +1036,16 @@ router.post(
           .status(err.status)
           .json({ success: false, message: err.message });
       if (err.code === "23505") {
-        return res
-          .status(409)
-          .json({
-            success: false,
-            message: "Student already has an active enrollment",
-          });
+        return res.status(409).json({
+          success: false,
+          message: "Student already has an active enrollment",
+        });
       }
       next(err);
     }
   },
 );
 
-// PATCH /api/admin/enrollments/:id/deactivate
 router.patch(
   "/enrollments/:id/deactivate",
   validate(idParam, "params"),
@@ -1169,12 +1062,10 @@ router.patch(
       );
 
       if (result.rows.length === 0) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message: "Enrollment not found or already inactive",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Enrollment not found or already inactive",
+        });
       }
 
       logger.info("Enrollment deactivated", {
@@ -1190,11 +1081,6 @@ router.patch(
   },
 );
 
-// ============================================================
-// PAIR STATUS
-// ============================================================
-
-// GET /api/admin/enrollments/:id/pair-status
 router.get(
   "/enrollments/:id/pair-status",
   validate(idParam, "params"),
@@ -1235,12 +1121,10 @@ router.get(
       );
 
       if (result.rows.length === 0) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            message: "Enrollment not found or inactive",
-          });
+        return res.status(404).json({
+          success: false,
+          message: "Enrollment not found or inactive",
+        });
       }
 
       const data = result.rows[0];
@@ -1257,11 +1141,6 @@ router.get(
   },
 );
 
-// ============================================================
-// MIGRATE
-// ============================================================
-
-// POST /api/admin/migrate
 router.post("/migrate", validate(migrateBody), async (req, res, next) => {
   try {
     const { enrollment_id, to_center_id } = req.body;
@@ -1278,24 +1157,20 @@ router.post("/migrate", validate(migrateBody), async (req, res, next) => {
     );
 
     if (enrollmentResult.rows.length === 0) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message:
-            "Enrollment not found, inactive, or does not belong to your center",
-        });
+      return res.status(404).json({
+        success: false,
+        message:
+          "Enrollment not found, inactive, or does not belong to your center",
+      });
     }
 
     const enrollment = enrollmentResult.rows[0];
 
     if (enrollment.from_center_id === to_center_id) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Enrollment is already in the target center",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Enrollment is already in the target center",
+      });
     }
 
     const toCenterResult = await query(
@@ -1304,12 +1179,10 @@ router.post("/migrate", validate(migrateBody), async (req, res, next) => {
     );
 
     if (toCenterResult.rows.length === 0) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: "Target center not found or inactive",
-        });
+      return res.status(404).json({
+        success: false,
+        message: "Target center not found or inactive",
+      });
     }
 
     const toCenter = toCenterResult.rows[0];

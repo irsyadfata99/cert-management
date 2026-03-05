@@ -1,22 +1,7 @@
 const { query, withTransaction } = require("../config/database");
 const logger = require("../config/logger");
-
-// ============================================================
-// CONSTANTS
-// ============================================================
-
-// [FIX] Satu konstanta yang dipakai di service layer.
-// Validator juga harus pakai nilai yang sama — import dari sini
-// jika ingin menghindari drift.
 const BATCH_MAX_SIZE = 100;
 
-// ============================================================
-// HELPERS
-// ============================================================
-
-/**
- * Normalize error dari DB function agar pesan internal tidak bocor ke client.
- */
 const normalizeDbError = (err) => {
   if (err.message?.includes("Stock sertifikat tidak mencukupi")) {
     const normalized = new Error("Insufficient certificate stock");
@@ -26,23 +11,8 @@ const normalizeDbError = (err) => {
   return err;
 };
 
-// ============================================================
-// PRINT CERTIFICATE
-// ============================================================
-
-/**
- * Print sertifikat satuan.
- *
- * [MULTI-CENTER] centerId sekarang adalah center dari enrollment/student,
- * bukan center utama teacher. Validasi akses teacher menggunakan
- * teacher_centers — teacher boleh print selama dia di-assign ke
- * center tersebut.
- */
 const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
   return withTransaction(async (client) => {
-    // [MULTI-CENTER] Validasi:
-    // 1. Enrollment ada dan active di center ini
-    // 2. Teacher di-assign ke center ini (via teacher_centers)
     const enrollment = await client.query(
       `SELECT e.id FROM enrollments e
        WHERE e.id = $1
@@ -104,12 +74,6 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
   });
 };
 
-/**
- * Print sertifikat batch — menggunakan bulk INSERT.
- *
- * [MULTI-CENTER] Semua enrollment dalam batch harus berada di
- * center yang sama dan teacher harus di-assign ke center tersebut.
- */
 const printBatch = async ({ items, teacherId, centerId }) => {
   if (!items?.length) {
     const err = new Error("No items provided for batch print");
@@ -126,7 +90,6 @@ const printBatch = async ({ items, teacherId, centerId }) => {
   }
 
   return withTransaction(async (client) => {
-    // [MULTI-CENTER] Validasi teacher punya akses ke center ini
     const teacherAccess = await client.query(
       `SELECT 1 FROM teacher_centers
        WHERE teacher_id = $1 AND center_id = $2`,
@@ -221,13 +184,8 @@ const printBatch = async ({ items, teacherId, centerId }) => {
   });
 };
 
-// ============================================================
-// REPRINT
-// ============================================================
-
 const reprint = async ({ originalCertId, teacherId, centerId, ptcDate }) => {
   return withTransaction(async (client) => {
-    // [MULTI-CENTER] Validasi teacher akses ke center cert ini
     const original = await client.query(
       `SELECT c.id, c.enrollment_id, c.is_reprint, c.center_id
        FROM certificates c
@@ -280,10 +238,6 @@ const reprint = async ({ originalCertId, teacherId, centerId, ptcDate }) => {
     return cert;
   });
 };
-
-// ============================================================
-// QUERIES
-// ============================================================
 
 const getByTeacher = async ({
   teacherId,

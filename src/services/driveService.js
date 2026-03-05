@@ -1,25 +1,9 @@
-// [FIX] Sebelumnya kemungkinan: const drive = require("../config/drive")
-// atau const { getDrive } = require("../config/drive") tapi drive.js belum export getDrive.
-// Sekarang drive.js sudah export getDrive() — import disesuaikan.
 const { getDrive } = require("../config/drive");
 const { Readable } = require("stream");
 const logger = require("../config/logger");
 
-// ============================================================
-// RETRY HELPER — exponential backoff
-// ============================================================
-
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/**
- * Jalankan fn dengan retry + exponential backoff.
- * Hanya retry untuk error yang bersifat transient (429, 5xx).
- *
- * @param {Function} fn        - Async function yang akan dijalankan
- * @param {number}   retries   - Maksimal jumlah retry (default: 3)
- * @param {number}   baseDelay - Delay awal dalam ms (default: 500)
- * @returns {Promise<any>}
- */
 const withRetry = async (fn, retries = 3, baseDelay = 500) => {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -27,13 +11,14 @@ const withRetry = async (fn, retries = 3, baseDelay = 500) => {
     } catch (err) {
       const isLast = attempt === retries;
       const statusCode = err.code ?? err.status ?? err.response?.status;
-      const isRetryable = statusCode === 429 || (statusCode >= 500 && statusCode < 600);
+      const isRetryable =
+        statusCode === 429 || (statusCode >= 500 && statusCode < 600);
 
       if (isLast || !isRetryable) {
         throw err;
       }
 
-      const delay = baseDelay * 2 ** attempt; // 500, 1000, 2000 ms
+      const delay = baseDelay * 2 ** attempt;
       logger.warn("Drive API error, retrying...", {
         attempt: attempt + 1,
         retries,
@@ -47,13 +32,6 @@ const withRetry = async (fn, retries = 3, baseDelay = 500) => {
   }
 };
 
-// ============================================================
-// FOLDER OPERATIONS
-// ============================================================
-
-/**
- * Buat folder baru di Google Drive.
- */
 const createFolder = async (name, parentFolderId) => {
   const drive = getDrive();
 
@@ -73,18 +51,10 @@ const createFolder = async (name, parentFolderId) => {
   return folderId;
 };
 
-// ============================================================
-// FILE OPERATIONS
-// ============================================================
-
-/**
- * Upload file ke Google Drive.
- */
 const uploadFile = async ({ buffer, fileName, mimeType, folderId }) => {
   const drive = getDrive();
 
   const response = await withRetry(() => {
-    // Buat Readable baru di setiap attempt agar stream tidak habis
     const readable = Readable.from(buffer);
 
     return drive.files.create({
@@ -107,18 +77,12 @@ const uploadFile = async ({ buffer, fileName, mimeType, folderId }) => {
   return { fileId, fileName: name, webViewLink };
 };
 
-/**
- * Hapus file dari Google Drive.
- */
 const deleteFile = async (fileId) => {
   const drive = getDrive();
   await withRetry(() => drive.files.delete({ fileId }));
   logger.info("Drive file deleted", { fileId });
 };
 
-/**
- * Ambil metadata file dari Google Drive.
- */
 const getFileMetadata = async (fileId) => {
   const drive = getDrive();
 
@@ -132,10 +96,6 @@ const getFileMetadata = async (fileId) => {
   const { id, name, mimeType, size, webViewLink } = response.data;
   return { fileId: id, fileName: name, mimeType, size, webViewLink };
 };
-
-// ============================================================
-// CENTER FOLDER
-// ============================================================
 
 const createCenterFolder = async (centerName) => {
   return createFolder(centerName, process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID);

@@ -1,22 +1,7 @@
 const { query, withTransaction } = require("../config/database");
 const logger = require("../config/logger");
-
-// ============================================================
-// CONSTANTS
-// ============================================================
-
-// [FIX] Satu konstanta yang dipakai di service layer.
-// Export agar bisa dipakai di validator jika perlu,
-// menghindari drift nilai antara service dan validator.
 const BATCH_MAX_SIZE = 100;
 
-// ============================================================
-// HELPERS
-// ============================================================
-
-/**
- * Normalize error dari DB function agar pesan internal tidak bocor ke client.
- */
 const normalizeDbError = (err) => {
   if (err.message?.includes("Stock medali tidak mencukupi")) {
     const normalized = new Error("Insufficient medal stock");
@@ -26,23 +11,8 @@ const normalizeDbError = (err) => {
   return err;
 };
 
-// ============================================================
-// PRINT MEDAL
-// ============================================================
-
-/**
- * Print medali satuan.
- *
- * [MULTI-CENTER] centerId adalah center dari enrollment/student,
- * bukan center utama teacher. Validasi akses teacher menggunakan
- * teacher_centers — teacher boleh print selama dia di-assign ke
- * center tersebut.
- */
 const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
   return withTransaction(async (client) => {
-    // [MULTI-CENTER] Validasi:
-    // 1. Enrollment ada dan active di center ini
-    // 2. Teacher di-assign ke center ini (via teacher_centers)
     const enrollment = await client.query(
       `SELECT e.id FROM enrollments e
        WHERE e.id = $1
@@ -99,12 +69,6 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
   });
 };
 
-/**
- * Print medali batch — menggunakan bulk INSERT.
- *
- * [MULTI-CENTER] Semua enrollment dalam batch harus berada di
- * center yang sama dan teacher harus di-assign ke center tersebut.
- */
 const printBatch = async ({ items, teacherId, centerId }) => {
   if (!items?.length) {
     const err = new Error("No items provided for batch print");
@@ -121,7 +85,6 @@ const printBatch = async ({ items, teacherId, centerId }) => {
   }
 
   return withTransaction(async (client) => {
-    // [MULTI-CENTER] Validasi teacher punya akses ke center ini
     const teacherAccess = await client.query(
       `SELECT 1 FROM teacher_centers
        WHERE teacher_id = $1 AND center_id = $2`,
@@ -136,7 +99,6 @@ const printBatch = async ({ items, teacherId, centerId }) => {
 
     const enrollmentIds = items.map((i) => i.enrollmentId);
 
-    // Validasi semua enrollment
     const enrollmentCheck = await client.query(
       `SELECT id FROM enrollments
        WHERE id = ANY($1)
@@ -154,7 +116,6 @@ const printBatch = async ({ items, teacherId, centerId }) => {
       throw err;
     }
 
-    // Cek duplikat
     const alreadyPrinted = await client.query(
       `SELECT enrollment_id FROM medals WHERE enrollment_id = ANY($1)`,
       [enrollmentIds],
@@ -169,7 +130,6 @@ const printBatch = async ({ items, teacherId, centerId }) => {
       throw err;
     }
 
-    // Kurangi stock sekaligus
     try {
       await client.query(`SELECT fn_decrement_medal_stock($1, $2)`, [
         centerId,
@@ -179,15 +139,10 @@ const printBatch = async ({ items, teacherId, centerId }) => {
       throw normalizeDbError(err);
     }
 
-    // Generate batch_id
     const batchIdResult = await client.query(
       `SELECT gen_random_uuid() AS batch_id`,
     );
     const batchId = batchIdResult.rows[0].batch_id;
-
-    // --------------------------------------------------------
-    // BULK INSERT — satu query untuk semua item
-    // --------------------------------------------------------
     const valuePlaceholders = items
       .map(
         (_, i) =>
@@ -222,20 +177,11 @@ const printBatch = async ({ items, teacherId, centerId }) => {
   });
 };
 
-// ============================================================
-// QUERIES
-// ============================================================
-
-/**
- * [MULTI-CENTER] centerId bisa null untuk menampilkan medal
- * dari semua center yang di-assign ke teacher.
- */
 const getByTeacher = async ({ teacherId, centerId, limit, offset }) => {
   const conditions = ["med.teacher_id = $1"];
   const values = [teacherId];
   let idx = 2;
 
-  // Jika centerId null, tampilkan semua center milik teacher
   if (centerId !== null && centerId !== undefined) {
     conditions.push(`med.center_id = $${idx++}`);
     values.push(centerId);

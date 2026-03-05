@@ -2,7 +2,17 @@ require("dotenv").config({ path: ".env.test" });
 
 const request = require("supertest");
 const app = require("./setup/testApp");
-const { truncateAll, seedCenter, seedUser, seedStudent, seedModule, seedEnrollment, setStock, closeDb, pool } = require("./setup/testDb");
+const {
+  truncateAll,
+  seedCenter,
+  seedUser,
+  seedStudent,
+  seedModule,
+  seedEnrollment,
+  setStock,
+  closeDb,
+  pool,
+} = require("./setup/testDb");
 
 const loginAs = async (user) => {
   const agent = request.agent(app);
@@ -70,7 +80,9 @@ describe("Centers — Super Admin", () => {
     const res = await agent.get("/api/super-admin/centers?search=SuperAdmin");
 
     expect(res.status).toBe(200);
-    expect(res.body.data.every((c) => c.name.includes("SuperAdmin"))).toBe(true);
+    expect(res.body.data.every((c) => c.name.includes("SuperAdmin"))).toBe(
+      true,
+    );
   });
 
   test("GET /api/super-admin/centers — filter is_active=true", async () => {
@@ -103,7 +115,9 @@ describe("Centers — Super Admin", () => {
 
   test("PATCH /api/super-admin/centers/:id — 200 update center", async () => {
     const agent = await loginAs(superAdmin);
-    const res = await agent.patch(`/api/super-admin/centers/${center.id}`).send({ name: "Center Updated" });
+    const res = await agent
+      .patch(`/api/super-admin/centers/${center.id}`)
+      .send({ name: "Center Updated" });
 
     expect(res.status).toBe(200);
     expect(res.body.data.name).toBe("Center Updated");
@@ -111,14 +125,18 @@ describe("Centers — Super Admin", () => {
 
   test("PATCH /api/super-admin/centers/:id — 400 tidak ada field", async () => {
     const agent = await loginAs(superAdmin);
-    const res = await agent.patch(`/api/super-admin/centers/${center.id}`).send({});
+    const res = await agent
+      .patch(`/api/super-admin/centers/${center.id}`)
+      .send({});
 
     expect(res.status).toBe(400);
   });
 
   test("PATCH /api/super-admin/centers/:id — 404 center tidak ada", async () => {
     const agent = await loginAs(superAdmin);
-    const res = await agent.patch("/api/super-admin/centers/999999").send({ name: "Tidak Ada" });
+    const res = await agent
+      .patch("/api/super-admin/centers/999999")
+      .send({ name: "Tidak Ada" });
 
     expect(res.status).toBe(404);
   });
@@ -127,7 +145,9 @@ describe("Centers — Super Admin", () => {
     const tempCenter = await seedCenter({ name: "Center Deactivate" });
 
     const agent = await loginAs(superAdmin);
-    const res = await agent.patch(`/api/super-admin/centers/${tempCenter.id}/deactivate`);
+    const res = await agent.patch(
+      `/api/super-admin/centers/${tempCenter.id}/deactivate`,
+    );
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -138,7 +158,9 @@ describe("Centers — Super Admin", () => {
     const agent = await loginAs(superAdmin);
 
     await agent.patch(`/api/super-admin/centers/${tempCenter.id}/deactivate`);
-    const res = await agent.patch(`/api/super-admin/centers/${tempCenter.id}/deactivate`);
+    const res = await agent.patch(
+      `/api/super-admin/centers/${tempCenter.id}/deactivate`,
+    );
 
     expect(res.status).toBe(404);
   });
@@ -182,15 +204,15 @@ describe("Admins — Super Admin", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.every((u) => u.role === undefined || true)).toBe(true);
-    // role tidak di-expose di response, tapi data yang masuk harus admin
-    // verifikasi via count: teacher tidak boleh masuk
     const emails = res.body.data.map((u) => u.email);
     expect(emails).not.toContain("teacher@test.com");
   });
 
   test("GET /api/super-admin/admins — filter by center_id", async () => {
     const agent = await loginAs(superAdmin);
-    const res = await agent.get(`/api/super-admin/admins?center_id=${center.id}`);
+    const res = await agent.get(
+      `/api/super-admin/admins?center_id=${center.id}`,
+    );
 
     expect(res.status).toBe(200);
     expect(res.body.data.every((u) => u.center_id === center.id)).toBe(true);
@@ -250,6 +272,79 @@ describe("Admins — Super Admin", () => {
     expect(res.status).toBe(404);
   });
 
+  test("PATCH /api/super-admin/admins/:id — 200 update nama admin", async () => {
+    const tempAdmin = await seedUser({
+      email: "admin.patch.name@test.com",
+      name: "Admin Patch Name",
+      role: "admin",
+      center_id: center.id,
+      is_active: true,
+    });
+
+    const agent = await loginAs(superAdmin);
+    const res = await agent
+      .patch(`/api/super-admin/admins/${tempAdmin.id}`)
+      .send({ name: "Admin Name Updated" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.name).toBe("Admin Name Updated");
+  });
+
+  test("PATCH /api/super-admin/admins/:id — 200 update email admin — reset is_active", async () => {
+    const tempAdmin = await seedUser({
+      email: "admin.patch.email@test.com",
+      name: "Admin Patch Email",
+      role: "admin",
+      center_id: center.id,
+      is_active: true,
+    });
+
+    const agent = await loginAs(superAdmin);
+    const res = await agent
+      .patch(`/api/super-admin/admins/${tempAdmin.id}`)
+      .send({ email: "admin.email.updated@test.com" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.email).toBe("admin.email.updated@test.com");
+    // Email change harus reset is_active ke false (force re-login)
+    expect(res.body.data.is_active).toBe(false);
+  });
+
+  test("PATCH /api/super-admin/admins/:id — 400 tidak ada field", async () => {
+    const agent = await loginAs(superAdmin);
+    const res = await agent
+      .patch(`/api/super-admin/admins/${admin.id}`)
+      .send({});
+
+    expect(res.status).toBe(400);
+  });
+
+  test("PATCH /api/super-admin/admins/:id — 409 email sudah dipakai user lain", async () => {
+    const tempAdmin2 = await seedUser({
+      email: "admin.conflict2@test.com",
+      name: "Admin Conflict2",
+      role: "admin",
+      center_id: center.id,
+      is_active: true,
+    });
+
+    const agent = await loginAs(superAdmin);
+    const res = await agent
+      .patch(`/api/super-admin/admins/${tempAdmin2.id}`)
+      .send({ email: "admin@test.com" }); // email yang sudah ada
+
+    expect(res.status).toBe(409);
+  });
+
+  test("PATCH /api/super-admin/admins/:id — 404 update teacher via admin endpoint", async () => {
+    const agent = await loginAs(superAdmin);
+    const res = await agent
+      .patch(`/api/super-admin/admins/${teacher.id}`)
+      .send({ name: "Hacked Teacher Name" });
+
+    expect(res.status).toBe(404);
+  });
+
   test("PATCH /api/super-admin/admins/:id/deactivate — 200", async () => {
     const tempAdmin = await seedUser({
       email: "admin.deact@test.com",
@@ -260,7 +355,9 @@ describe("Admins — Super Admin", () => {
     });
 
     const agent = await loginAs(superAdmin);
-    const res = await agent.patch(`/api/super-admin/admins/${tempAdmin.id}/deactivate`);
+    const res = await agent.patch(
+      `/api/super-admin/admins/${tempAdmin.id}/deactivate`,
+    );
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -278,15 +375,18 @@ describe("Admins — Super Admin", () => {
     const agent = await loginAs(superAdmin);
     await agent.patch(`/api/super-admin/admins/${tempAdmin.id}/deactivate`);
 
-    const res = await agent.patch(`/api/super-admin/admins/${tempAdmin.id}/deactivate`);
+    const res = await agent.patch(
+      `/api/super-admin/admins/${tempAdmin.id}/deactivate`,
+    );
 
     expect(res.status).toBe(404);
   });
 
   test("PATCH /api/super-admin/admins/:id/deactivate — 404 deactivate teacher via admin endpoint", async () => {
-    // Teacher tidak boleh di-deactivate melalui endpoint admin
     const agent = await loginAs(superAdmin);
-    const res = await agent.patch(`/api/super-admin/admins/${teacher.id}/deactivate`);
+    const res = await agent.patch(
+      `/api/super-admin/admins/${teacher.id}/deactivate`,
+    );
 
     expect(res.status).toBe(404);
   });
@@ -372,7 +472,9 @@ describe("Monitoring Upload Status — Super Admin", () => {
 
   test("GET /api/super-admin/monitoring/upload-status — filter by center_id", async () => {
     const agent = await loginAs(superAdmin);
-    const res = await agent.get(`/api/super-admin/monitoring/upload-status?center_id=${center.id}`);
+    const res = await agent.get(
+      `/api/super-admin/monitoring/upload-status?center_id=${center.id}`,
+    );
 
     expect(res.status).toBe(200);
     expect(res.body.data.every((r) => r.center_id === center.id)).toBe(true);
@@ -380,15 +482,21 @@ describe("Monitoring Upload Status — Super Admin", () => {
 
   test("GET /api/super-admin/monitoring/upload-status — filter by status", async () => {
     const agent = await loginAs(superAdmin);
-    const res = await agent.get("/api/super-admin/monitoring/upload-status?status=printed");
+    const res = await agent.get(
+      "/api/super-admin/monitoring/upload-status?status=printed",
+    );
 
     expect(res.status).toBe(200);
-    expect(res.body.data.every((r) => r.upload_status === "printed")).toBe(true);
+    expect(res.body.data.every((r) => r.upload_status === "printed")).toBe(
+      true,
+    );
   });
 
   test("GET /api/super-admin/monitoring/upload-status — 400 status tidak valid", async () => {
     const agent = await loginAs(superAdmin);
-    const res = await agent.get("/api/super-admin/monitoring/upload-status?status=invalid_status");
+    const res = await agent.get(
+      "/api/super-admin/monitoring/upload-status?status=invalid_status",
+    );
 
     expect(res.status).toBe(400);
   });
@@ -444,7 +552,9 @@ describe("Monitoring Activity — Super Admin", () => {
 
   test("GET /api/super-admin/monitoring/activity — filter by center_id", async () => {
     const agent = await loginAs(superAdmin);
-    const res = await agent.get(`/api/super-admin/monitoring/activity?center_id=${center.id}`);
+    const res = await agent.get(
+      `/api/super-admin/monitoring/activity?center_id=${center.id}`,
+    );
 
     expect(res.status).toBe(200);
     expect(res.body.data.every((r) => r.center_id === center.id)).toBe(true);
@@ -456,34 +566,95 @@ describe("Monitoring Activity — Super Admin", () => {
 // ============================================================
 
 describe("Download Enrollments — Super Admin", () => {
-  test("GET /api/super-admin/download/enrollments — 200", async () => {
+  test("GET /api/super-admin/download/enrollments — 200 dengan data JSON", async () => {
     const agent = await loginAs(superAdmin);
     const res = await agent.get("/api/super-admin/download/enrollments");
 
     expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(Array.isArray(res.body.data)).toBe(true);
+  });
+
+  test("GET /api/super-admin/download/enrollments — Content-Type text/csv", async () => {
+    const agent = await loginAs(superAdmin);
+    const res = await agent.get("/api/super-admin/download/enrollments");
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/text\/csv/);
+  });
+
+  test("GET /api/super-admin/download/enrollments — Content-Disposition header ada filename", async () => {
+    const agent = await loginAs(superAdmin);
+    const res = await agent.get("/api/super-admin/download/enrollments");
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-disposition"]).toBeDefined();
+    expect(res.headers["content-disposition"]).toMatch(/attachment/);
+    expect(res.headers["content-disposition"]).toMatch(/enrollments_/);
+    expect(res.headers["content-disposition"]).toMatch(/\.csv/);
+  });
+
+  test("GET /api/super-admin/download/enrollments — response body adalah CSV valid", async () => {
+    const agent = await loginAs(superAdmin);
+    const res = await agent.get("/api/super-admin/download/enrollments");
+
+    expect(res.status).toBe(200);
+    // Baris pertama harus berisi header CSV
+    const lines = res.text.split("\n").filter(Boolean);
+    expect(lines.length).toBeGreaterThanOrEqual(1);
+
+    const header = lines[0];
+    expect(header).toContain("enrollment_id");
+    expect(header).toContain("student_name");
+    expect(header).toContain("teacher");
+    expect(header).toContain("center");
+    expect(header).toContain("status");
+  });
+
+  test("GET /api/super-admin/download/enrollments — data baris sesuai enrollment yang ada", async () => {
+    // Seed enrollment khusus untuk verifikasi CSV
+    const csvStudent = await seedStudent({
+      name: "Student CSV Test",
+      center_id: center.id,
+    });
+    const csvModule = await seedModule({ name: "Module CSV Test" });
+    await seedEnrollment({
+      student_id: csvStudent.id,
+      module_id: csvModule.id,
+      center_id: center.id,
+      teacher_id: teacher.id,
+    });
+
+    const agent = await loginAs(superAdmin);
+    const res = await agent.get("/api/super-admin/download/enrollments");
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("Student CSV Test");
   });
 
   test("GET /api/super-admin/download/enrollments — filter by center_id", async () => {
     const agent = await loginAs(superAdmin);
-    const res = await agent.get(`/api/super-admin/download/enrollments?center_id=${center.id}`);
+    const res = await agent.get(
+      `/api/super-admin/download/enrollments?center_id=${center.id}`,
+    );
 
     expect(res.status).toBe(200);
-    expect(res.body.data.every((r) => r.center_name !== undefined)).toBe(true);
+    expect(res.headers["content-type"]).toMatch(/text\/csv/);
   });
 
   test("GET /api/super-admin/download/enrollments — filter by date range", async () => {
     const agent = await loginAs(superAdmin);
-    const res = await agent.get("/api/super-admin/download/enrollments?date_from=2024-01-01&date_to=2024-12-31");
+    const res = await agent.get(
+      "/api/super-admin/download/enrollments?date_from=2024-01-01&date_to=2024-12-31",
+    );
 
     expect(res.status).toBe(200);
-    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.headers["content-type"]).toMatch(/text\/csv/);
   });
 
   test("GET /api/super-admin/download/enrollments — 400 format tanggal salah", async () => {
     const agent = await loginAs(superAdmin);
-    const res = await agent.get("/api/super-admin/download/enrollments?date_from=01-01-2024");
+    const res = await agent.get(
+      "/api/super-admin/download/enrollments?date_from=01-01-2024",
+    );
 
     expect(res.status).toBe(400);
   });

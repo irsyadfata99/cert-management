@@ -7,6 +7,7 @@ const {
   seedCenter,
   seedUser,
   closeDb,
+  pool,
 } = require("./setup/testDb");
 
 beforeAll(async () => {
@@ -138,5 +139,128 @@ describe("POST /auth/logout", () => {
 
     const res = await agent.get("/auth/me");
     expect(res.status).toBe(401);
+  });
+});
+
+// ============================================================
+// SESSION REVALIDATION
+// ============================================================
+
+describe("Session Revalidation — Cache Staleness", () => {
+  let center, activeUser;
+
+  beforeAll(async () => {
+    center = await seedCenter({ name: "Center Revalidation Test" });
+
+    activeUser = await seedUser({
+      email: "user.revalidate@test.com",
+      name: "User Revalidate",
+      role: "teacher",
+      center_id: center.id,
+      is_active: true,
+    });
+  });
+
+  test("user aktif bisa akses endpoint normal", async () => {
+    const agent = await loginAs(activeUser);
+    const res = await agent.get("/auth/me");
+
+    expect(res.status).toBe(200);
+  });
+
+  test("401 setelah user di-deactivate — cache stale terdeteksi", async () => {
+    const agent = await loginAs(activeUser);
+
+    // Pastikan dulu bisa akses
+    const before = await agent.get("/auth/me");
+    expect(before.status).toBe(200);
+
+    // Deactivate langsung di DB (simulasi admin deactivate dari luar session ini)
+    await pool.query(
+      `UPDATE users SET is_active = FALSE, updated_at = NOW() WHERE id = $1`,
+      [activeUser.id],
+    );
+
+    // Request berikutnya harus ditolak karena cache stale → refresh → is_active false
+    const after = await agent.get("/auth/me");
+    expect(after.status).toBe(401);
+
+    // Restore untuk test lain
+    await pool.query(
+      `UPDATE users SET is_active = TRUE, updated_at = NOW() WHERE id = $1`,
+      [activeUser.id],
+    );
+  });
+
+  test("user yang di-reactivate bisa akses kembali setelah login ulang", async () => {
+    // User dimatikan lalu dihidupkan lagi
+    await pool.query(
+      `UPDATE users SET is_active = FALSE, updated_at = NOW() WHERE id = $1`,
+      [activeUser.id],
+    );
+    await pool.query(
+      `UPDATE users SET is_active = TRUE, updated_at = NOW() WHERE id = $1`,
+      [activeUser.id],
+    );
+
+    // Login ulang (session baru)
+    const agent = await loginAs(activeUser);
+    const res = await agent.get("/auth/me");
+
+    expect(res.status).toBe(200);
+  });
+
+  test("perubahan nama user terefleksi setelah cache stale", async () => {
+    const agent = await loginAs(activeUser);
+
+    // Pastikan nama awal
+    const before = await agent.get("/auth/me");
+    expect(before.status).toBe(200);
+    expect(before.body.data.name).toBe("User Revalidate");
+
+    // Update nama langsung di DB
+    await pool.query(
+      `UPDATE users SET name = 'User Revalidate Updated', updated_at = NOW() WHERE id = $1`,
+      [activeUser.id],
+    );
+
+    // Cache masih valid di request langsung berikutnya (dalam 30 detik)
+    // Tapi jika stale check interval sudah lewat, nama baru harus muncul
+    // Untuk test ini: paksa cache expire dengan manipulasi waktu tidak praktis,
+    // jadi kita verifikasi lewat login ulang
+    const freshAgent = await loginAs(activeUser);
+    const after = await freshAgent.get("/auth/me");
+
+    expect(after.status).toBe(200);
+    expect(after.body.data.name).toBe("User Revalidate Updated");
+
+    // Restore
+    await pool.query(
+      `UPDATE users SET name = 'User Revalidate', updated_at = NOW() WHERE id = $1`,
+      [activeUser.id],
+    );
+  });
+
+  test("teacher multi-center: center_ids terupdate setelah center baru di-assign", async () => {
+    // Verifikasi bahwa session fresh mencerminkan center assignment terbaru
+    const mcCenter = await seedCenter({ name: "MC Session Test Center" });
+
+    // Assign center baru langsung di DB
+    await pool.query(
+      `INSERT INTO teacher_centers (teacher_id, center_id, is_primary)
+       VALUES ($1, $2, FALSE)
+       ON CONFLICT DO NOTHING`,
+      [activeUser.id, mcCenter.id],
+    );
+
+    // Login ulang → session baru harus punya center_ids yang updated
+    const freshAgent = await loginAs(activeUser);
+    const res = await freshAgent.get("/auth/me");
+
+    expect(res.status).toBe(200);
+    // center_ids tidak wajib di-expose di /me, tapi request ke endpoint teacher harus berhasil
+    // Verifikasi: teacher bisa lihat stock center baru
+    const stockRes = await freshAgent.get("/api/teacher/stock");
+    expect(stockRes.status).toBe(200);
   });
 });
