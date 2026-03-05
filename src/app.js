@@ -112,6 +112,55 @@ app.use("/api/teacher", require("./routes/teacher"));
 app.use("/api/drive", require("./routes/drive"));
 
 // ============================================================
+// TEST-ONLY ROUTE — inject session tanpa Google OAuth
+//
+// [FIX] Route ini HARUS berada di sini, sebelum 404 handler.
+//
+// Bug sebelumnya: route didaftarkan di testApp.js SETELAH
+// require("../../../src/app") — tapi saat require() dijalankan,
+// seluruh app.js sudah dieksekusi termasuk 404 handler.
+// Express mendaftarkan middleware secara berurutan, sehingga
+// request ke /__test/login selalu ditangkap 404 handler duluan
+// → loginAs() selalu dapat 404 → semua test dapat 401.
+//
+// Solusi: daftarkan route di sini, di dalam blok NODE_ENV === "test",
+// sehingga tidak ada overhead di production/development.
+// ============================================================
+
+if (process.env.NODE_ENV === "test") {
+  const { query } = require("./config/database");
+
+  app.post("/__test/login", async (req, res) => {
+    try {
+      const { userId } = req.body;
+
+      const result = await query(
+        `SELECT id, email, name, avatar, role, center_id, drive_folder_id, is_active
+         FROM users WHERE id = $1 AND is_active = TRUE`,
+        [userId],
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const user = result.rows[0];
+
+      req.session.passport = { user: user.id };
+      req.session.cachedUser = user;
+
+      await new Promise((resolve, reject) =>
+        req.session.save((err) => (err ? reject(err) : resolve())),
+      );
+
+      res.status(200).json({ success: true, user });
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+}
+
+// ============================================================
 // 404 HANDLER
 // ============================================================
 
