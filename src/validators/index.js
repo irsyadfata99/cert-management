@@ -316,10 +316,13 @@ const validate = (schema, target = "body") => {
     const result = schema.safeParse(req[target]);
 
     if (!result.success) {
-      const errors = result.error.errors.map((e) => ({
-        field: e.path.join("."),
-        message: e.message,
-      }));
+      // SESUDAH
+      const errors = (result.error.issues ?? result.error.errors ?? []).map(
+        (e) => ({
+          field: e.path.join("."),
+          message: e.message,
+        }),
+      );
 
       return res.status(400).json({
         success: false,
