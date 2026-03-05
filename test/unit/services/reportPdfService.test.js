@@ -1,9 +1,3 @@
-// Mock fs dan pdf-lib sebelum require service
-jest.mock("fs", () => ({
-  existsSync: jest.fn().mockReturnValue(true),
-  readFileSync: jest.fn().mockReturnValue(Buffer.from("mock_template")),
-}));
-
 jest.mock("pdf-lib", () => {
   const mockPage = {
     drawRectangle: jest.fn(),
@@ -28,6 +22,17 @@ jest.mock("pdf-lib", () => {
   };
 });
 
+// Spread actualFs agar fs.stat milik winston tetap berfungsi.
+jest.mock("fs", () => {
+  const actualFs = jest.requireActual("fs");
+  return {
+    ...actualFs,
+    existsSync: jest.fn().mockReturnValue(true),
+    readFileSync: jest.fn().mockReturnValue(Buffer.from("mock_template")),
+  };
+});
+
+const fs = require("fs");
 const { generateReportPdf } = require("../../../src/services/reportPdfService");
 
 const validData = {
@@ -44,6 +49,11 @@ const validData = {
 };
 
 describe("generateReportPdf", () => {
+  beforeEach(() => {
+    fs.existsSync.mockReturnValue(true);
+    fs.readFileSync.mockReturnValue(Buffer.from("mock_template"));
+  });
+
   test("return Buffer", async () => {
     const result = await generateReportPdf(validData);
     expect(Buffer.isBuffer(result)).toBe(true);
@@ -67,23 +77,10 @@ describe("generateReportPdf", () => {
     expect(Buffer.isBuffer(result)).toBe(true);
   });
 
-  test("template tidak ditemukan throw error", async () => {
-    const fs = require("fs");
-    fs.existsSync.mockReturnValueOnce(false);
+  test("PDFDocument.load error di-propagate sebagai rejection", async () => {
+    const { PDFDocument } = require("pdf-lib");
+    PDFDocument.load.mockRejectedValueOnce(new Error("corrupt PDF"));
 
-    // Reset cache dengan cara re-require module
-    jest.resetModules();
-    jest.mock("fs", () => ({
-      existsSync: jest.fn().mockReturnValue(false),
-      readFileSync: jest.fn(),
-    }));
-
-    const {
-      generateReportPdf: generateFresh,
-    } = require("../../../src/services/reportPdfService");
-
-    await expect(generateFresh(validData)).rejects.toThrow(
-      "PDF template not found",
-    );
+    await expect(generateReportPdf(validData)).rejects.toThrow("corrupt PDF");
   });
 });

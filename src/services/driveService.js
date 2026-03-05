@@ -1,4 +1,4 @@
-const drive = require("../config/drive");
+const { getDrive } = require("../config/drive");
 const { Readable } = require("stream");
 const logger = require("../config/logger");
 
@@ -24,8 +24,7 @@ const withRetry = async (fn, retries = 3, baseDelay = 500) => {
     } catch (err) {
       const isLast = attempt === retries;
       const statusCode = err.code ?? err.status ?? err.response?.status;
-      const isRetryable =
-        statusCode === 429 || (statusCode >= 500 && statusCode < 600);
+      const isRetryable = statusCode === 429 || (statusCode >= 500 && statusCode < 600);
 
       if (isLast || !isRetryable) {
         throw err;
@@ -53,6 +52,8 @@ const withRetry = async (fn, retries = 3, baseDelay = 500) => {
  * Buat folder baru di Google Drive.
  */
 const createFolder = async (name, parentFolderId) => {
+  const drive = getDrive();
+
   const response = await withRetry(() =>
     drive.files.create({
       requestBody: {
@@ -77,6 +78,8 @@ const createFolder = async (name, parentFolderId) => {
  * Upload file ke Google Drive.
  */
 const uploadFile = async ({ buffer, fileName, mimeType, folderId }) => {
+  const drive = getDrive();
+
   const response = await withRetry(() => {
     // Buat Readable baru di setiap attempt agar stream tidak habis
     const readable = Readable.from(buffer);
@@ -105,6 +108,7 @@ const uploadFile = async ({ buffer, fileName, mimeType, folderId }) => {
  * Hapus file dari Google Drive.
  */
 const deleteFile = async (fileId) => {
+  const drive = getDrive();
   await withRetry(() => drive.files.delete({ fileId }));
   logger.info("Drive file deleted", { fileId });
 };
@@ -113,6 +117,8 @@ const deleteFile = async (fileId) => {
  * Ambil metadata file dari Google Drive.
  */
 const getFileMetadata = async (fileId) => {
+  const drive = getDrive();
+
   const response = await withRetry(() =>
     drive.files.get({
       fileId,

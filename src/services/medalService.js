@@ -2,6 +2,12 @@ const { query, withTransaction } = require("../config/database");
 const logger = require("../config/logger");
 
 // ============================================================
+// CONSTANTS
+// ============================================================
+
+const BATCH_MAX_SIZE = 100;
+
+// ============================================================
 // HELPERS
 // ============================================================
 
@@ -38,10 +44,7 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
       throw err;
     }
 
-    const existing = await client.query(
-      `SELECT id FROM medals WHERE enrollment_id = $1`,
-      [enrollmentId],
-    );
+    const existing = await client.query(`SELECT id FROM medals WHERE enrollment_id = $1`, [enrollmentId]);
 
     if (existing.rows.length > 0) {
       const err = new Error("Medal already printed for this enrollment");
@@ -84,6 +87,16 @@ const printBatch = async ({ items, teacherId, centerId }) => {
     throw err;
   }
 
+  // [FIX] Validasi batch size di service layer — tidak hanya di validator.
+  // Jika service dipanggil langsung (mis. background job) tanpa melalui
+  // HTTP layer, limit ini tetap ditegakkan. Mencegah placeholder query
+  // yang terlalu panjang dan potensi DB timeout.
+  if (items.length > BATCH_MAX_SIZE) {
+    const err = new Error(`Batch size cannot exceed ${BATCH_MAX_SIZE}. Got: ${items.length}`);
+    err.status = 400;
+    throw err;
+  }
+
   return withTransaction(async (client) => {
     const enrollmentIds = items.map((i) => i.enrollmentId);
 
@@ -95,61 +108,38 @@ const printBatch = async ({ items, teacherId, centerId }) => {
     );
 
     if (enrollmentCheck.rows.length !== enrollmentIds.length) {
-      const err = new Error(
-        "One or more enrollments not found or not assigned to you",
-      );
+      const err = new Error("One or more enrollments not found or not assigned to you");
       err.status = 404;
       throw err;
     }
 
     // Cek duplikat
-    const alreadyPrinted = await client.query(
-      `SELECT enrollment_id FROM medals WHERE enrollment_id = ANY($1)`,
-      [enrollmentIds],
-    );
+    const alreadyPrinted = await client.query(`SELECT enrollment_id FROM medals WHERE enrollment_id = ANY($1)`, [enrollmentIds]);
 
     if (alreadyPrinted.rows.length > 0) {
       const ids = alreadyPrinted.rows.map((r) => r.enrollment_id);
-      const err = new Error(
-        `Medals already printed for enrollment IDs: ${ids.join(", ")}`,
-      );
+      const err = new Error(`Medals already printed for enrollment IDs: ${ids.join(", ")}`);
       err.status = 409;
       throw err;
     }
 
     // Kurangi stock sekaligus
     try {
-      await client.query(`SELECT fn_decrement_medal_stock($1, $2)`, [
-        centerId,
-        items.length,
-      ]);
+      await client.query(`SELECT fn_decrement_medal_stock($1, $2)`, [centerId, items.length]);
     } catch (err) {
       throw normalizeDbError(err);
     }
 
     // Generate batch_id
-    const batchIdResult = await client.query(
-      `SELECT gen_random_uuid() AS batch_id`,
-    );
+    const batchIdResult = await client.query(`SELECT gen_random_uuid() AS batch_id`);
     const batchId = batchIdResult.rows[0].batch_id;
 
     // --------------------------------------------------------
     // BULK INSERT — satu query untuk semua item
     // --------------------------------------------------------
-    const valuePlaceholders = items
-      .map(
-        (_, i) =>
-          `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, $${i * 5 + 5})`,
-      )
-      .join(", ");
+    const valuePlaceholders = items.map((_, i) => `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, $${i * 5 + 5})`).join(", ");
 
-    const flatValues = items.flatMap((item) => [
-      item.enrollmentId,
-      teacherId,
-      centerId,
-      item.ptcDate,
-      batchId,
-    ]);
+    const flatValues = items.flatMap((item) => [item.enrollmentId, teacherId, centerId, item.ptcDate, batchId]);
 
     const result = await client.query(
       `INSERT INTO medals (enrollment_id, teacher_id, center_id, ptc_date, batch_id)

@@ -58,8 +58,33 @@ const authorize = (...roles) => {
 
 // ============================================================
 // CENTER SCOPE GUARD
+//
 // Pastikan admin/teacher hanya bisa akses data center mereka sendiri.
 // Super admin dibebaskan.
+//
+// KAPAN DIPAKAI:
+// Gunakan middleware ini pada route yang menerima center_id secara
+// eksplisit di params atau body, dan resource-nya harus dibatasi
+// per center. Contoh:
+//
+//   router.get("/centers/:centerId/students",
+//     isAuthenticated,
+//     requireSameCenter,   // ← pastikan user punya akses ke centerId ini
+//     async (req, res) => { ... }
+//   );
+//
+// TIDAK perlu dipakai jika center scoping sudah dilakukan implisit
+// via req.user.center_id di dalam handler (pola resolveCenterId).
+// Kedua pola boleh dipakai, tapi jangan campur keduanya di route
+// yang sama untuk menghindari kebingungan.
+//
+// [FIX] Versi sebelumnya langsung next() jika targetCenterId tidak
+// ditemukan di params maupun body. Ini berbahaya karena route yang
+// lupa menyertakan center_id akan lolos tanpa validasi apapun.
+//
+// Fix: jika centerId tidak ditemukan dan user bukan super_admin,
+// tolak request dengan 400 agar developer sadar ada yang salah,
+// daripada diam-diam membiarkan akses tanpa validasi.
 // ============================================================
 
 const requireSameCenter = (req, res, next) => {
@@ -75,7 +100,20 @@ const requireSameCenter = (req, res, next) => {
 
   const targetCenterId = parseInt(req.params.centerId || req.body.center_id);
 
-  if (!targetCenterId) return next();
+  // [FIX] Sebelumnya: langsung next() jika targetCenterId NaN/0
+  // Sekarang: tolak dengan 400 agar tidak ada silent pass-through
+  if (!targetCenterId) {
+    logger.warn("requireSameCenter: center_id missing from request", {
+      userId: req.user.id,
+      method: req.method,
+      url: req.originalUrl,
+    });
+
+    return res.status(400).json({
+      success: false,
+      message: "center_id is required",
+    });
+  }
 
   if (req.user.center_id !== targetCenterId) {
     logger.warn("Cross-center access attempt", {

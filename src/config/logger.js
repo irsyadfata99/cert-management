@@ -50,6 +50,23 @@ const customLevels = {
 
 winston.addColors(customLevels.colors);
 
+// ============================================================
+// EXACT LEVEL FILTER
+//
+// Winston file transport dengan `level: "http"` menangkap SEMUA
+// level yang numeric value-nya <= http (yaitu error, warn, info, http)
+// karena winston memakai hierarchy ceiling, bukan exact match.
+//
+// Akibatnya http.log menjadi duplikat combined.log + http requests,
+// bukan khusus http saja seperti yang diharapkan.
+//
+// Fix: gunakan format filter yang hanya meloloskan log dengan level
+// persis sama dengan target — sehingga http.log benar-benar hanya
+// berisi request log dari morgan.
+// ============================================================
+
+const exactLevel = (targetLevel) => winston.format((info) => (info.level === targetLevel ? info : false))();
+
 const logger = winston.createLogger({
   levels: customLevels.levels,
   // Set ke "http" agar morgan request log masuk di semua environment.
@@ -59,7 +76,7 @@ const logger = winston.createLogger({
     new winston.transports.Console({
       format: consoleFormat,
     }),
-    // combined.log: info ke atas saja (tidak include http request spam)
+    // combined.log: info ke atas saja (warn, error) — tidak include http request spam
     new winston.transports.File({
       filename: path.join(logDir, "combined.log"),
       format: fileFormat,
@@ -68,10 +85,10 @@ const logger = winston.createLogger({
       maxFiles: 7,
       tailable: true,
     }),
-    // http.log: khusus request log dari morgan
+    // http.log: KHUSUS request log dari morgan (exact level = "http")
     new winston.transports.File({
       filename: path.join(logDir, "http.log"),
-      format: fileFormat,
+      format: combine(exactLevel("http"), fileFormat),
       level: "http",
       maxsize: 10 * 1024 * 1024,
       maxFiles: 7,
