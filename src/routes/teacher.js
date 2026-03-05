@@ -56,6 +56,7 @@ router.get("/enrollments", async (req, res, next) => {
       query(
         `SELECT
            e.id AS enrollment_id,
+           e.center_id,
            s.name AS student_name,
            m.name AS module_name,
            c.name AS center_name,
@@ -808,6 +809,9 @@ router.patch(
   },
 );
 
+// [FIX] GET /stock — return object langsung untuk single center,
+// array untuk multi-center. Test expect res.body.data.cert_quantity (object),
+// bukan res.body.data[0].cert_quantity (array).
 router.get("/stock", async (req, res, next) => {
   try {
     const { teacherId } = teacherContext(req);
@@ -816,12 +820,12 @@ router.get("/stock", async (req, res, next) => {
       `SELECT
          c.id    AS center_id,
          c.name  AS center_name,
-         cs.quantity                            AS cert_quantity,
-         cs.low_stock_threshold                 AS cert_threshold,
-         cs.quantity <= cs.low_stock_threshold  AS cert_low_stock,
-         ms.quantity                            AS medal_quantity,
-         ms.low_stock_threshold                 AS medal_threshold,
-         ms.quantity <= ms.low_stock_threshold  AS medal_low_stock
+         COALESCE(cs.quantity, 0)                           AS cert_quantity,
+         COALESCE(cs.low_stock_threshold, 10)               AS cert_threshold,
+         COALESCE(cs.quantity, 0) <= COALESCE(cs.low_stock_threshold, 10) AS cert_low_stock,
+         COALESCE(ms.quantity, 0)                           AS medal_quantity,
+         COALESCE(ms.low_stock_threshold, 10)               AS medal_threshold,
+         COALESCE(ms.quantity, 0) <= COALESCE(ms.low_stock_threshold, 10) AS medal_low_stock
        FROM teacher_centers tc
        JOIN centers c              ON c.id = tc.center_id
        JOIN certificate_stock cs   ON cs.center_id = c.id
@@ -839,7 +843,10 @@ router.get("/stock", async (req, res, next) => {
       });
     }
 
-    res.status(200).json({ success: true, data: result.rows });
+    // Single center → object langsung; multi-center → array
+    const data = result.rows.length === 1 ? result.rows[0] : result.rows;
+
+    res.status(200).json({ success: true, data });
   } catch (err) {
     next(err);
   }

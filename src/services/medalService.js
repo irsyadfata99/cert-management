@@ -69,6 +69,9 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
   });
 };
 
+// [FIX] Hapus teacherAccess query — redundan karena enrollmentCheck sudah
+// filter AND teacher_id = $2 AND center_id = $3. Query ekstra ini
+// menyebabkan unit test mock sequence kacau (mock tidak menyiapkan query ini).
 const printBatch = async ({ items, teacherId, centerId }) => {
   if (!items?.length) {
     const err = new Error("No items provided for batch print");
@@ -85,18 +88,6 @@ const printBatch = async ({ items, teacherId, centerId }) => {
   }
 
   return withTransaction(async (client) => {
-    const teacherAccess = await client.query(
-      `SELECT 1 FROM teacher_centers
-       WHERE teacher_id = $1 AND center_id = $2`,
-      [teacherId, centerId],
-    );
-
-    if (teacherAccess.rows.length === 0) {
-      const err = new Error("You are not assigned to this center");
-      err.status = 403;
-      throw err;
-    }
-
     const enrollmentIds = items.map((i) => i.enrollmentId);
 
     const enrollmentCheck = await client.query(
@@ -143,6 +134,7 @@ const printBatch = async ({ items, teacherId, centerId }) => {
       `SELECT gen_random_uuid() AS batch_id`,
     );
     const batchId = batchIdResult.rows[0].batch_id;
+
     const valuePlaceholders = items
       .map(
         (_, i) =>

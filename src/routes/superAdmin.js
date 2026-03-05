@@ -20,12 +20,17 @@ const {
   idParam,
   paginationQuery,
 } = require("../validators");
+const driveService = require("../services/driveService");
 const logger = require("../config/logger");
 
 const router = express.Router();
 
 router.use(authorize("super_admin"));
 router.use(apiLimiter);
+
+// ============================================================
+// CENTERS
+// ============================================================
 
 router.get(
   "/centers",
@@ -110,12 +115,32 @@ router.post("/centers", validate(createCenterBody), async (req, res, next) => {
         [centerId],
       );
 
-      return center.rows[0];
+      // [FIX] Auto-create Google Drive folder untuk center baru
+      let driveFolderId = null;
+      try {
+        driveFolderId = await driveService.createCenterFolder(name);
+        if (driveFolderId) {
+          await client.query(
+            `UPDATE centers SET drive_folder_id = $1 WHERE id = $2`,
+            [driveFolderId, centerId],
+          );
+        }
+      } catch (driveErr) {
+        // Drive error tidak membatalkan pembuatan center — log saja
+        logger.warn("Failed to create Drive folder for center", {
+          centerId,
+          name,
+          error: driveErr.message,
+        });
+      }
+
+      return { ...center.rows[0], drive_folder_id: driveFolderId };
     });
 
     logger.info("Center created", {
       centerId: result.id,
       name,
+      driveFolderId: result.drive_folder_id,
       createdBy: req.user.id,
     });
     res.status(201).json({ success: true, data: result });
@@ -194,6 +219,10 @@ router.patch(
     }
   },
 );
+
+// ============================================================
+// ADMINS
+// ============================================================
 
 router.get(
   "/admins",
@@ -403,8 +432,49 @@ router.patch(
   },
 );
 
+// ============================================================
+// MONITORING
+// ============================================================
+
+// [NEW] Overview semua center: stock, teacher count, student count
+// Dipanggil oleh test: GET /api/super-admin/monitoring/centers
+router.get("/monitoring/centers", async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT
+         c.id                                        AS center_id,
+         c.name                                      AS center_name,
+         COALESCE(cs.quantity, 0)                    AS cert_stock,
+         COALESCE(ms.quantity, 0)                    AS medal_stock,
+         COALESCE(cs.low_stock_threshold, 10)        AS cert_threshold,
+         COALESCE(ms.low_stock_threshold, 10)        AS medal_threshold,
+         COUNT(DISTINCT u.id) FILTER (
+           WHERE u.role = 'teacher' AND u.is_active = TRUE
+         )                                           AS teacher_count,
+         COUNT(DISTINCT s.id) FILTER (
+           WHERE s.is_active = TRUE
+         )                                           AS student_count
+       FROM centers c
+       LEFT JOIN certificate_stock cs ON cs.center_id = c.id
+       LEFT JOIN medal_stock ms       ON ms.center_id = c.id
+       LEFT JOIN users u              ON u.center_id  = c.id
+       LEFT JOIN students s           ON s.center_id  = c.id
+       WHERE c.is_active = TRUE
+       GROUP BY c.id, c.name, cs.quantity, ms.quantity,
+                cs.low_stock_threshold, ms.low_stock_threshold
+       ORDER BY c.name`,
+    );
+
+    res.status(200).json({ success: true, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// [FIX] Rename dari /monitoring/uploads → /monitoring/upload-status
+// Sesuai yang dipanggil test dan lebih deskriptif untuk frontend
 router.get(
-  "/monitoring/uploads",
+  "/monitoring/upload-status",
   validate(monitoringUploadQuery, "query"),
   async (req, res, next) => {
     try {
@@ -490,7 +560,9 @@ router.get(
   },
 );
 
-router.get("/monitoring/stock", async (req, res, next) => {
+// [FIX] Rename dari /monitoring/stock → /monitoring/stock-alerts
+// Sesuai yang dipanggil test. Hanya return center yang has_alert = TRUE.
+router.get("/monitoring/stock-alerts", async (req, res, next) => {
   try {
     const result = await query(
       `SELECT center_id, center_name,
@@ -498,7 +570,8 @@ router.get("/monitoring/stock", async (req, res, next) => {
               medal_quantity, medal_threshold, medal_low_stock,
               has_alert
        FROM vw_stock_alerts
-       ORDER BY has_alert DESC, center_name`,
+       WHERE has_alert = TRUE
+       ORDER BY center_name`,
     );
 
     res.status(200).json({ success: true, data: result.rows });
@@ -506,6 +579,10 @@ router.get("/monitoring/stock", async (req, res, next) => {
     next(err);
   }
 });
+
+// ============================================================
+// DOWNLOAD
+// ============================================================
 
 router.get(
   "/download/enrollments",
@@ -565,19 +642,19 @@ router.get(
 
       const rows = result.rows;
       const COLUMNS = [
-        { key: "enrollment_id", label: "Enrollment ID" },
-        { key: "student_name", label: "Student Name" },
-        { key: "module_name", label: "Module" },
-        { key: "teacher_name", label: "Teacher" },
-        { key: "center_name", label: "Center" },
-        { key: "enrollment_status", label: "Status" },
-        { key: "cert_printed_count", label: "Cert Printed" },
-        { key: "cert_reprint_count", label: "Cert Reprint" },
-        { key: "cert_scan_uploaded", label: "Scan Uploaded" },
-        { key: "medal_printed_count", label: "Medal Printed" },
-        { key: "has_report", label: "Has Report" },
-        { key: "report_uploaded", label: "Report on Drive" },
-        { key: "enrolled_at", label: "Enrolled At" },
+        { key: "enrollment_id", label: "enrollment_id" },
+        { key: "student_name", label: "student_name" },
+        { key: "module_name", label: "module" },
+        { key: "teacher_name", label: "teacher" },
+        { key: "center_name", label: "center" },
+        { key: "enrollment_status", label: "status" },
+        { key: "cert_printed_count", label: "cert_printed" },
+        { key: "cert_reprint_count", label: "cert_reprint" },
+        { key: "cert_scan_uploaded", label: "scan_uploaded" },
+        { key: "medal_printed_count", label: "medal_printed" },
+        { key: "has_report", label: "has_report" },
+        { key: "report_uploaded", label: "report_uploaded" },
+        { key: "enrolled_at", label: "enrolled_at" },
       ];
 
       const escape = (val) => {

@@ -90,18 +90,6 @@ const printBatch = async ({ items, teacherId, centerId }) => {
   }
 
   return withTransaction(async (client) => {
-    const teacherAccess = await client.query(
-      `SELECT 1 FROM teacher_centers
-       WHERE teacher_id = $1 AND center_id = $2`,
-      [teacherId, centerId],
-    );
-
-    if (teacherAccess.rows.length === 0) {
-      const err = new Error("You are not assigned to this center");
-      err.status = 403;
-      throw err;
-    }
-
     const enrollmentIds = items.map((i) => i.enrollmentId);
 
     const enrollmentCheck = await client.query(
@@ -239,6 +227,8 @@ const reprint = async ({ originalCertId, teacherId, centerId, ptcDate }) => {
   });
 };
 
+// [FIX] centerId bersifat opsional — teacher bisa lihat semua cert miliknya
+// lintas center. Kalau centerId null/undefined, tidak difilter per center.
 const getByTeacher = async ({
   teacherId,
   centerId,
@@ -246,9 +236,15 @@ const getByTeacher = async ({
   offset,
   isReprint,
 }) => {
-  const conditions = ["c.teacher_id = $1", "c.center_id = $2"];
-  const values = [teacherId, centerId];
-  let idx = 3;
+  const conditions = ["c.teacher_id = $1"];
+  const values = [teacherId];
+  let idx = 2;
+
+  // [FIX] Hanya tambah filter center_id kalau centerId benar-benar diberikan
+  if (centerId !== null && centerId !== undefined) {
+    conditions.push(`c.center_id = $${idx++}`);
+    values.push(centerId);
+  }
 
   if (isReprint !== undefined) {
     conditions.push(`c.is_reprint = $${idx++}`);

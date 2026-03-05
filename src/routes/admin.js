@@ -653,16 +653,32 @@ router.post(
       const { center_id, is_primary } = req.body;
       const adminCenterId = resolveCenterId(req, null);
 
+      // [FIX] Admin hanya boleh assign ke centernya sendiri.
+      // Return 404 (bukan 403) agar tidak bocorkan eksistensi center lain.
       if (adminCenterId && center_id !== adminCenterId) {
-        return res.status(403).json({
+        return res.status(404).json({
           success: false,
-          message: "You can only assign teachers to your own center",
+          message: "Center not found or inactive",
         });
       }
 
+      // [FIX] Untuk admin (bukan super_admin), teacher yang di-assign harus
+      // sudah terdaftar di center admin tersebut (atau minimal teacher valid).
+      // Test "404 teacher center lain" mengharapkan bahwa teacher dari center
+      // lain tidak bisa di-assign ke center admin ini.
       const teacherCheck = await query(
-        `SELECT id FROM users WHERE id = $1 AND role = 'teacher'`,
-        [req.params.id],
+        adminCenterId
+          ? // Admin: teacher harus sudah ada di center admin (setidaknya terdaftar
+            // di sistem dan memiliki center_id yang sama), atau kita cukup cek
+            // teacher exist dan belum assigned ke center lain yang "asing".
+            // Berdasarkan test: teacher milik center lain → 404.
+            // Artinya: teacher harus punya center_id = adminCenterId ATAU
+            // belum punya center sama sekali.
+            `SELECT id FROM users
+             WHERE id = $1 AND role = 'teacher'
+               AND (center_id = $2 OR center_id IS NULL)`
+          : `SELECT id FROM users WHERE id = $1 AND role = 'teacher'`,
+        adminCenterId ? [req.params.id, adminCenterId] : [req.params.id],
       );
       if (teacherCheck.rows.length === 0) {
         return res
@@ -726,9 +742,11 @@ router.delete("/teachers/:id/centers/:centerId", async (req, res, next) => {
     const adminCenterId = resolveCenterId(req, null);
 
     if (adminCenterId && centerId !== adminCenterId) {
-      return res.status(403).json({
+      // [FIX] Return 404 (bukan 403) agar tidak bocorkan eksistensi center lain.
+      // Test expect 404 ketika admin mencoba hapus teacher dari center bukan miliknya.
+      return res.status(404).json({
         success: false,
-        message: "You can only remove teachers from your own center",
+        message: "Teacher is not assigned to this center",
       });
     }
 
@@ -818,8 +836,25 @@ router.get(
       const adminCenterId = resolveCenterId(req, null);
 
       if (adminCenterId) {
+        // [FIX] Cek akses: teacher harus terdaftar di center admin ATAU
+        // memiliki center_id (primary) yang sama dengan admin.
+        // Kasus: setelah DELETE primary center, teacher_centers sudah tidak
+        // mengandung adminCenterId, tapi users.center_id sudah diupdate ke
+        // center baru. Kita tetap izinkan admin melihat centers jika teacher
+        // sebelumnya memang miliknya (via users.center_id = adminCenterId
+        // di masa lalu tidak bisa dicek, jadi kita relax: izinkan jika
+        // teacher ada di center ini ATAU admin adalah yang melakukan assign).
+        // Solusi praktis: cek teacher_centers ATAU users.center_id.
         const accessCheck = await query(
-          `SELECT 1 FROM teacher_centers WHERE teacher_id = $1 AND center_id = $2`,
+          `SELECT 1 FROM users
+           WHERE id = $1 AND role = 'teacher'
+             AND (
+               center_id = $2
+               OR EXISTS (
+                 SELECT 1 FROM teacher_centers
+                 WHERE teacher_id = $1 AND center_id = $2
+               )
+             )`,
           [teacherId, adminCenterId],
         );
         if (accessCheck.rows.length === 0) {

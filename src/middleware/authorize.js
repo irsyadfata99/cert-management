@@ -2,10 +2,12 @@ const { query } = require("../config/database");
 const logger = require("../config/logger");
 
 const SESSION_CACHE_REVALIDATE_INTERVAL_MS = 30 * 1000;
+
 const authorize = (...roles) => {
   return async (req, res, next) => {
-    // 1. Cek session
-    if (!req.session?.userId) {
+    // [FIX] Gunakan req.isAuthenticated() dari Passport, bukan req.session.userId
+    // yang tidak pernah di-set. Passport menggunakan req.session.passport.user.
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
@@ -19,7 +21,17 @@ const authorize = (...roles) => {
       let user;
 
       if (!cached) {
-        user = await fetchUserFromDb(req.session.userId);
+        // Tidak ada cache — ambil dari DB
+        // req.user sudah di-populate Passport via deserializeUser
+        const userId = req.user?.id ?? req.session?.passport?.user;
+
+        if (!userId) {
+          return res
+            .status(401)
+            .json({ success: false, message: "Unauthorized" });
+        }
+
+        user = await fetchUserFromDb(userId);
 
         if (!user) {
           req.session.destroy(() => {});
@@ -47,16 +59,15 @@ const authorize = (...roles) => {
         const cachedAt = new Date(cached.cached_at ?? 0).getTime();
         const updatedAt = new Date(dbRow.updated_at).getTime();
 
-        if (updatedAt > cachedAt || !dbRow.is_active) {
+        if (!dbRow.is_active) {
+          req.session.destroy(() => {});
+          return res
+            .status(401)
+            .json({ success: false, message: "Account deactivated" });
+        }
+
+        if (updatedAt > cachedAt) {
           logger.info("Session cache stale, refreshing", { userId: cached.id });
-
-          if (!dbRow.is_active) {
-            req.session.destroy(() => {});
-            return res
-              .status(401)
-              .json({ success: false, message: "Account deactivated" });
-          }
-
           user = await fetchUserFromDb(cached.id);
           req.session.cachedUser = user;
         } else {
