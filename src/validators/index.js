@@ -18,7 +18,6 @@ const paginationQuery = z.object({
 });
 
 // FIX: Zod v4 — gunakan z.union agar null dan undefined keduanya valid
-// z.enum().nullable().optional() bisa berperilaku tidak konsisten di v4
 const scoreEnum = z
   .union([z.enum(["A+", "A", "B+", "B"]), z.null()])
   .optional();
@@ -54,6 +53,16 @@ const createAdminBody = z.object({
     .int()
     .positive(),
 });
+
+// [NEW] Update admin — name dan/atau email
+const updateAdminBody = z
+  .object({
+    name: z.string().min(1).max(255).optional(),
+    email: z.string().email("Invalid email format").max(255).optional(),
+  })
+  .refine((d) => d.name !== undefined || d.email !== undefined, {
+    message: "At least one field (name or email) must be provided",
+  });
 
 // SUPER ADMIN — Monitoring
 const monitoringUploadQuery = paginationQuery.extend({
@@ -125,6 +134,26 @@ const createTeacherBody = z.object({
   center_id: z.number().int().positive().optional(),
 });
 
+// [NEW] Update teacher — hanya name dan email yang boleh diedit
+// center dikelola via assign/remove center endpoint
+const updateTeacherBody = z
+  .object({
+    name: z.string().min(1).max(255).optional(),
+    email: z.string().email("Invalid email format").max(255).optional(),
+  })
+  .refine((d) => d.name !== undefined || d.email !== undefined, {
+    message: "At least one field (name or email) must be provided",
+  });
+
+// [NEW] Assign teacher ke center
+const assignTeacherCenterBody = z.object({
+  center_id: z
+    .number({ required_error: "center_id is required" })
+    .int()
+    .positive(),
+  is_primary: z.boolean().optional(),
+});
+
 const listTeachersQuery = paginationQuery.extend({
   center_id: z.string().regex(/^\d+$/).optional(),
 });
@@ -152,8 +181,6 @@ const listEnrollmentsQuery = paginationQuery.extend({
 });
 
 // ADMIN — Migrate
-// [FIX] Dipindah dari bagian SUPER ADMIN karena migrate sekarang ada di admin route.
-// Super admin juga bisa akses endpoint ini karena authorize("admin", "super_admin").
 const migrateBody = z.object({
   enrollment_id: z
     .number({ required_error: "enrollment_id is required" })
@@ -251,12 +278,9 @@ const updateReportBody = z
     score_responsibility: scoreEnum,
     score_coding_skills: scoreEnum,
   })
-  .refine(
-    // null dianggap sebagai field yang di-provide (user sengaja clear score)
-    // undefined berarti field tidak disertakan sama sekali
-    (d) => Object.values(d).some((v) => v !== undefined),
-    { message: "At least one field must be provided" },
-  );
+  .refine((d) => Object.values(d).some((v) => v !== undefined), {
+    message: "At least one field must be provided",
+  });
 
 // ============================================================
 // DRIVE — Stock
@@ -306,17 +330,11 @@ const updateThresholdBody = z.object({
 // MIDDLEWARE FACTORY
 // ============================================================
 
-/**
- * Buat Express middleware dari Zod schema.
- * @param {import("zod").ZodSchema} schema
- * @param {"body"|"query"|"params"} target
- */
 const validate = (schema, target = "body") => {
   return (req, res, next) => {
     const result = schema.safeParse(req[target]);
 
     if (!result.success) {
-      // SESUDAH
       const errors = (result.error.issues ?? result.error.errors ?? []).map(
         (e) => ({
           field: e.path.join("."),
@@ -342,6 +360,7 @@ module.exports = {
   createCenterBody,
   updateCenterBody,
   createAdminBody,
+  updateAdminBody,
   monitoringUploadQuery,
   monitoringActivityQuery,
   downloadEnrollmentsQuery,
@@ -352,6 +371,8 @@ module.exports = {
   createModuleBody,
   updateModuleBody,
   createTeacherBody,
+  updateTeacherBody,
+  assignTeacherCenterBody,
   listTeachersQuery,
   createEnrollmentBody,
   listEnrollmentsQuery,

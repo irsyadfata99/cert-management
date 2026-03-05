@@ -1,44 +1,26 @@
-// ============================================================
-// WORD COUNT HELPER
-// ============================================================
-
-const MIN_WORD_COUNT = 200;
+const { REPORT_MIN_WORD_COUNT } = require("../config/constants");
 
 /**
- * Hitung jumlah kata dari string teks.
- * - Strip HTML tags jika ada
- * - Normalize whitespace
- * - Hitung token yang dipisah spasi
- *
- * @param {string} text
- * @returns {number}
- */
-const countWords = (text) => {
-  if (!text || typeof text !== "string") return 0;
-
-  const stripped = text
-    .replace(/<[^>]*>/g, " ") // strip HTML tags
-    .replace(/\s+/g, " ") // normalize whitespace
-    .trim();
-
-  if (stripped.length === 0) return 0;
-
-  return stripped.split(" ").length;
-};
-
-/**
- * Validasi apakah teks memenuhi minimum word count untuk final report.
+ * Hitung jumlah kata dalam string dan validasi minimum.
  *
  * @param {string} text
  * @returns {{ valid: boolean, count: number, min: number }}
  */
 const validateWordCount = (text) => {
-  const count = countWords(text);
+  if (!text || typeof text !== "string") {
+    return { valid: false, count: 0, min: REPORT_MIN_WORD_COUNT };
+  }
+
+  const count = text
+    .trim()
+    .split(/\s+/)
+    .filter((w) => w.length > 0).length;
+
   return {
-    valid: count >= MIN_WORD_COUNT,
+    valid: count >= REPORT_MIN_WORD_COUNT,
     count,
-    min: MIN_WORD_COUNT,
+    min: REPORT_MIN_WORD_COUNT,
   };
 };
 
-module.exports = { countWords, validateWordCount, MIN_WORD_COUNT };
+module.exports = { validateWordCount };

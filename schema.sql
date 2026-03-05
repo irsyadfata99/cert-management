@@ -1,6 +1,7 @@
 -- ============================================================
 -- SCHEMA: Certificate & Medal Management System
--- Version: 2.5
+-- Version: 3.0
+-- Changelog: Tambah teacher_centers untuk multi-center support
 -- ============================================================
 
 -- EXTENSIONS
@@ -41,12 +42,21 @@ CREATE TABLE IF NOT EXISTS users (
   drive_folder_id  TEXT,
   is_active        BOOLEAN       NOT NULL DEFAULT FALSE,
   created_at       TIMESTAMP     NOT NULL DEFAULT NOW(),
-  updated_at       TIMESTAMP     NOT NULL DEFAULT NOW(),
-  CONSTRAINT chk_teacher_has_center
-    CHECK (role != 'teacher' OR center_id IS NOT NULL)
+  updated_at       TIMESTAMP     NOT NULL DEFAULT NOW()
+  -- NOTE: constraint chk_teacher_has_center dihapus di v3.0
+  -- Teacher sekarang boleh punya 0+ center via teacher_centers
 );
 
--- 4. MODULES
+-- 4. TEACHER_CENTERS (junction — multi-center support)
+CREATE TABLE IF NOT EXISTS teacher_centers (
+  teacher_id  INTEGER   NOT NULL REFERENCES users(id)   ON DELETE CASCADE,
+  center_id   INTEGER   NOT NULL REFERENCES centers(id) ON DELETE CASCADE,
+  is_primary  BOOLEAN   NOT NULL DEFAULT FALSE,
+  created_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (teacher_id, center_id)
+);
+
+-- 5. MODULES
 CREATE TABLE IF NOT EXISTS modules (
   id          SERIAL        PRIMARY KEY,
   name        VARCHAR(255)  NOT NULL,
@@ -56,7 +66,7 @@ CREATE TABLE IF NOT EXISTS modules (
   updated_at  TIMESTAMP     NOT NULL DEFAULT NOW()
 );
 
--- 5. STUDENTS
+-- 6. STUDENTS
 CREATE TABLE IF NOT EXISTS students (
   id          SERIAL        PRIMARY KEY,
   name        VARCHAR(255)  NOT NULL,
@@ -66,7 +76,7 @@ CREATE TABLE IF NOT EXISTS students (
   updated_at  TIMESTAMP     NOT NULL DEFAULT NOW()
 );
 
--- 6. ENROLLMENTS
+-- 7. ENROLLMENTS
 CREATE TABLE IF NOT EXISTS enrollments (
   id               SERIAL    PRIMARY KEY,
   student_id       INTEGER   NOT NULL REFERENCES students (id)  ON DELETE RESTRICT,
@@ -79,7 +89,7 @@ CREATE TABLE IF NOT EXISTS enrollments (
   updated_at       TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- 7. CERTIFICATE_STOCK
+-- 8. CERTIFICATE_STOCK
 CREATE TABLE IF NOT EXISTS certificate_stock (
   id                   SERIAL    PRIMARY KEY,
   center_id            INTEGER   NOT NULL UNIQUE REFERENCES centers (id) ON DELETE CASCADE,
@@ -88,7 +98,7 @@ CREATE TABLE IF NOT EXISTS certificate_stock (
   updated_at           TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- 8. MEDAL_STOCK
+-- 9. MEDAL_STOCK
 CREATE TABLE IF NOT EXISTS medal_stock (
   id                   SERIAL    PRIMARY KEY,
   center_id            INTEGER   NOT NULL UNIQUE REFERENCES centers (id) ON DELETE CASCADE,
@@ -97,7 +107,7 @@ CREATE TABLE IF NOT EXISTS medal_stock (
   updated_at           TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- 9. REPORTS
+-- 10. REPORTS
 CREATE TABLE IF NOT EXISTS reports (
   id                       SERIAL        PRIMARY KEY,
   enrollment_id            INTEGER       NOT NULL UNIQUE
@@ -121,7 +131,7 @@ CREATE TABLE IF NOT EXISTS reports (
     CHECK (word_count >= 200)
 );
 
--- 10. CERTIFICATES
+-- 11. CERTIFICATES
 CREATE TABLE IF NOT EXISTS certificates (
   id                SERIAL       PRIMARY KEY,
   cert_unique_id    VARCHAR(50)  NOT NULL UNIQUE,
@@ -139,7 +149,7 @@ CREATE TABLE IF NOT EXISTS certificates (
   printed_at        TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 
--- 11. MEDALS
+-- 12. MEDALS
 CREATE TABLE IF NOT EXISTS medals (
   id               SERIAL       PRIMARY KEY,
   medal_unique_id  VARCHAR(50)  NOT NULL UNIQUE,
@@ -160,6 +170,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_one_active_enrollment
   ON enrollments (student_id)
   WHERE is_active = TRUE;
 
+-- Setiap teacher hanya boleh punya satu primary center
+CREATE UNIQUE INDEX IF NOT EXISTS idx_teacher_centers_one_primary
+  ON teacher_centers (teacher_id)
+  WHERE is_primary = TRUE;
+
 -- ============================================================
 -- SEQUENCES
 -- ============================================================
@@ -178,6 +193,8 @@ CREATE INDEX IF NOT EXISTS idx_users_email                 ON users (email);
 CREATE INDEX IF NOT EXISTS idx_users_role                  ON users (role);
 CREATE INDEX IF NOT EXISTS idx_users_center_id             ON users (center_id);
 CREATE INDEX IF NOT EXISTS idx_users_is_active             ON users (is_active);
+CREATE INDEX IF NOT EXISTS idx_teacher_centers_teacher_id  ON teacher_centers (teacher_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_centers_center_id   ON teacher_centers (center_id);
 CREATE INDEX IF NOT EXISTS idx_students_center_id          ON students (center_id);
 CREATE INDEX IF NOT EXISTS idx_students_is_active          ON students (is_active);
 CREATE INDEX IF NOT EXISTS idx_students_name               ON students (name);
@@ -502,9 +519,6 @@ WHERE e.is_active = TRUE
   AND u.is_active = TRUE;
 
 CREATE OR REPLACE VIEW vw_monthly_center_activity AS
--- Hitung cert dan medal secara terpisah di subquery untuk menghindari
--- cross join yang menghasilkan kombinasi duplikat jika enrollment
--- memiliki keduanya di bulan yang sama.
 WITH cert_monthly AS (
   SELECT
     center_id,

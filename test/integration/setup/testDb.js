@@ -20,6 +20,7 @@ const truncateAll = async () => {
       medal_stock,
       students,
       modules,
+      teacher_centers,
       users,
       centers,
       session
@@ -63,7 +64,21 @@ const seedUser = async ({
      RETURNING *`,
     [email, name, role, center_id, is_active],
   );
-  return result.rows[0];
+
+  const user = result.rows[0];
+
+  // [MULTI-CENTER] Auto-seed teacher_centers jika user adalah teacher
+  // dan memiliki center_id — konsisten dengan migration data existing
+  if (role === "teacher" && center_id) {
+    await pool.query(
+      `INSERT INTO teacher_centers (teacher_id, center_id, is_primary)
+       VALUES ($1, $2, TRUE)
+       ON CONFLICT (teacher_id, center_id) DO NOTHING`,
+      [user.id, center_id],
+    );
+  }
+
+  return user;
 };
 
 const seedStudent = async ({ name, center_id }) => {
@@ -110,6 +125,22 @@ const setStock = async ({ center_id, cert_qty = 100, medal_qty = 100 }) => {
   );
 };
 
+// [NEW] Helper untuk assign teacher ke center tambahan di test
+const seedTeacherCenter = async ({
+  teacher_id,
+  center_id,
+  is_primary = false,
+}) => {
+  const result = await pool.query(
+    `INSERT INTO teacher_centers (teacher_id, center_id, is_primary)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (teacher_id, center_id) DO UPDATE SET is_primary = EXCLUDED.is_primary
+     RETURNING *`,
+    [teacher_id, center_id, is_primary],
+  );
+  return result.rows[0];
+};
+
 const closeDb = async () => {
   await pool.end();
 };
@@ -122,6 +153,7 @@ module.exports = {
   seedStudent,
   seedModule,
   seedEnrollment,
+  seedTeacherCenter,
   setStock,
   closeDb,
 };

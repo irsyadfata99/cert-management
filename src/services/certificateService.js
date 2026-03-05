@@ -5,6 +5,9 @@ const logger = require("../config/logger");
 // CONSTANTS
 // ============================================================
 
+// [FIX] Satu konstanta yang dipakai di service layer.
+// Validator juga harus pakai nilai yang sama — import dari sini
+// jika ingin menghindari drift.
 const BATCH_MAX_SIZE = 100;
 
 // ============================================================
@@ -29,12 +32,27 @@ const normalizeDbError = (err) => {
 
 /**
  * Print sertifikat satuan.
+ *
+ * [MULTI-CENTER] centerId sekarang adalah center dari enrollment/student,
+ * bukan center utama teacher. Validasi akses teacher menggunakan
+ * teacher_centers — teacher boleh print selama dia di-assign ke
+ * center tersebut.
  */
 const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
   return withTransaction(async (client) => {
+    // [MULTI-CENTER] Validasi:
+    // 1. Enrollment ada dan active di center ini
+    // 2. Teacher di-assign ke center ini (via teacher_centers)
     const enrollment = await client.query(
-      `SELECT id FROM enrollments
-       WHERE id = $1 AND teacher_id = $2 AND center_id = $3 AND is_active = TRUE`,
+      `SELECT e.id FROM enrollments e
+       WHERE e.id = $1
+         AND e.teacher_id = $2
+         AND e.center_id = $3
+         AND e.is_active = TRUE
+         AND EXISTS (
+           SELECT 1 FROM teacher_centers tc
+           WHERE tc.teacher_id = $2 AND tc.center_id = $3
+         )`,
       [enrollmentId, teacherId, centerId],
     );
 
@@ -51,13 +69,17 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
     );
 
     if (existingCert.rows.length > 0) {
-      const err = new Error("Certificate already printed for this enrollment. Use reprint instead.");
+      const err = new Error(
+        "Certificate already printed for this enrollment. Use reprint instead.",
+      );
       err.status = 409;
       throw err;
     }
 
     try {
-      await client.query(`SELECT fn_decrement_certificate_stock($1, 1)`, [centerId]);
+      await client.query(`SELECT fn_decrement_certificate_stock($1, 1)`, [
+        centerId,
+      ]);
     } catch (err) {
       throw normalizeDbError(err);
     }
@@ -75,6 +97,7 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
       certUniqueId: cert.cert_unique_id,
       enrollmentId,
       teacherId,
+      centerId,
     });
 
     return cert;
@@ -83,6 +106,9 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
 
 /**
  * Print sertifikat batch — menggunakan bulk INSERT.
+ *
+ * [MULTI-CENTER] Semua enrollment dalam batch harus berada di
+ * center yang sama dan teacher harus di-assign ke center tersebut.
  */
 const printBatch = async ({ items, teacherId, centerId }) => {
   if (!items?.length) {
@@ -91,33 +117,47 @@ const printBatch = async ({ items, teacherId, centerId }) => {
     throw err;
   }
 
-  // [FIX] Validasi batch size di service layer — tidak hanya di validator.
-  // Jika service dipanggil langsung (mis. background job) tanpa melalui
-  // HTTP layer, limit ini tetap ditegakkan. Mencegah placeholder query
-  // yang terlalu panjang dan potensi DB timeout.
   if (items.length > BATCH_MAX_SIZE) {
-    const err = new Error(`Batch size cannot exceed ${BATCH_MAX_SIZE}. Got: ${items.length}`);
+    const err = new Error(
+      `Batch size cannot exceed ${BATCH_MAX_SIZE}. Got: ${items.length}`,
+    );
     err.status = 400;
     throw err;
   }
 
   return withTransaction(async (client) => {
+    // [MULTI-CENTER] Validasi teacher punya akses ke center ini
+    const teacherAccess = await client.query(
+      `SELECT 1 FROM teacher_centers
+       WHERE teacher_id = $1 AND center_id = $2`,
+      [teacherId, centerId],
+    );
+
+    if (teacherAccess.rows.length === 0) {
+      const err = new Error("You are not assigned to this center");
+      err.status = 403;
+      throw err;
+    }
+
     const enrollmentIds = items.map((i) => i.enrollmentId);
 
-    // Validasi semua enrollment sekaligus
     const enrollmentCheck = await client.query(
       `SELECT id FROM enrollments
-       WHERE id = ANY($1) AND teacher_id = $2 AND center_id = $3 AND is_active = TRUE`,
+       WHERE id = ANY($1)
+         AND teacher_id = $2
+         AND center_id = $3
+         AND is_active = TRUE`,
       [enrollmentIds, teacherId, centerId],
     );
 
     if (enrollmentCheck.rows.length !== enrollmentIds.length) {
-      const err = new Error("One or more enrollments not found or not assigned to you");
+      const err = new Error(
+        "One or more enrollments not found or not assigned to you",
+      );
       err.status = 404;
       throw err;
     }
 
-    // Cek duplikat
     const alreadyPrinted = await client.query(
       `SELECT enrollment_id FROM certificates
        WHERE enrollment_id = ANY($1) AND is_reprint = FALSE`,
@@ -126,28 +166,41 @@ const printBatch = async ({ items, teacherId, centerId }) => {
 
     if (alreadyPrinted.rows.length > 0) {
       const ids = alreadyPrinted.rows.map((r) => r.enrollment_id);
-      const err = new Error(`Certificates already printed for enrollment IDs: ${ids.join(", ")}`);
+      const err = new Error(
+        `Certificates already printed for enrollment IDs: ${ids.join(", ")}`,
+      );
       err.status = 409;
       throw err;
     }
 
-    // Kurangi stock sekaligus
     try {
-      await client.query(`SELECT fn_decrement_certificate_stock($1, $2)`, [centerId, items.length]);
+      await client.query(`SELECT fn_decrement_certificate_stock($1, $2)`, [
+        centerId,
+        items.length,
+      ]);
     } catch (err) {
       throw normalizeDbError(err);
     }
 
-    // Generate batch_id
-    const batchIdResult = await client.query(`SELECT gen_random_uuid() AS batch_id`);
+    const batchIdResult = await client.query(
+      `SELECT gen_random_uuid() AS batch_id`,
+    );
     const batchId = batchIdResult.rows[0].batch_id;
 
-    // --------------------------------------------------------
-    // BULK INSERT — satu query untuk semua item
-    // --------------------------------------------------------
-    const valuePlaceholders = items.map((_, i) => `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, FALSE, $${i * 5 + 5})`).join(", ");
+    const valuePlaceholders = items
+      .map(
+        (_, i) =>
+          `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, FALSE, $${i * 5 + 5})`,
+      )
+      .join(", ");
 
-    const flatValues = items.flatMap((item) => [item.enrollmentId, teacherId, centerId, item.ptcDate, batchId]);
+    const flatValues = items.flatMap((item) => [
+      item.enrollmentId,
+      teacherId,
+      centerId,
+      item.ptcDate,
+      batchId,
+    ]);
 
     const result = await client.query(
       `INSERT INTO certificates (enrollment_id, teacher_id, center_id, ptc_date, is_reprint, batch_id)
@@ -157,7 +210,6 @@ const printBatch = async ({ items, teacherId, centerId }) => {
     );
 
     const certs = result.rows;
-
     logger.info("Batch certificate printed", {
       batchId,
       count: certs.length,
@@ -175,16 +227,26 @@ const printBatch = async ({ items, teacherId, centerId }) => {
 
 const reprint = async ({ originalCertId, teacherId, centerId, ptcDate }) => {
   return withTransaction(async (client) => {
+    // [MULTI-CENTER] Validasi teacher akses ke center cert ini
     const original = await client.query(
-      `SELECT c.id, c.enrollment_id, c.is_reprint
+      `SELECT c.id, c.enrollment_id, c.is_reprint, c.center_id
        FROM certificates c
        JOIN enrollments e ON e.id = c.enrollment_id
-       WHERE c.id = $1 AND e.teacher_id = $2 AND c.center_id = $3 AND c.is_reprint = FALSE`,
+       WHERE c.id = $1
+         AND e.teacher_id = $2
+         AND c.center_id = $3
+         AND c.is_reprint = FALSE
+         AND EXISTS (
+           SELECT 1 FROM teacher_centers tc
+           WHERE tc.teacher_id = $2 AND tc.center_id = $3
+         )`,
       [originalCertId, teacherId, centerId],
     );
 
     if (original.rows.length === 0) {
-      const err = new Error("Original certificate not found or not assigned to you");
+      const err = new Error(
+        "Original certificate not found or not assigned to you",
+      );
       err.status = 404;
       throw err;
     }
@@ -192,7 +254,9 @@ const reprint = async ({ originalCertId, teacherId, centerId, ptcDate }) => {
     const { enrollment_id: enrollmentId } = original.rows[0];
 
     try {
-      await client.query(`SELECT fn_decrement_certificate_stock($1, 1)`, [centerId]);
+      await client.query(`SELECT fn_decrement_certificate_stock($1, 1)`, [
+        centerId,
+      ]);
     } catch (err) {
       throw normalizeDbError(err);
     }
@@ -210,6 +274,7 @@ const reprint = async ({ originalCertId, teacherId, centerId, ptcDate }) => {
       newCertUniqueId: cert.cert_unique_id,
       originalCertId,
       teacherId,
+      centerId,
     });
 
     return cert;
@@ -220,7 +285,13 @@ const reprint = async ({ originalCertId, teacherId, centerId, ptcDate }) => {
 // QUERIES
 // ============================================================
 
-const getByTeacher = async ({ teacherId, centerId, limit, offset, isReprint }) => {
+const getByTeacher = async ({
+  teacherId,
+  centerId,
+  limit,
+  offset,
+  isReprint,
+}) => {
   const conditions = ["c.teacher_id = $1", "c.center_id = $2"];
   const values = [teacherId, centerId];
   let idx = 3;
@@ -247,10 +318,19 @@ const getByTeacher = async ({ teacherId, centerId, limit, offset, isReprint }) =
        LIMIT $${idx} OFFSET $${idx + 1}`,
       [...values, limit, offset],
     ),
-    query(`SELECT COUNT(*)::int AS total FROM certificates c ${whereClause}`, values),
+    query(
+      `SELECT COUNT(*)::int AS total FROM certificates c ${whereClause}`,
+      values,
+    ),
   ]);
 
   return { rows: dataResult.rows, total: countResult.rows[0].total };
 };
 
-module.exports = { printSingle, printBatch, reprint, getByTeacher };
+module.exports = {
+  printSingle,
+  printBatch,
+  reprint,
+  getByTeacher,
+  BATCH_MAX_SIZE,
+};
