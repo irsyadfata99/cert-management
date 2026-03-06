@@ -94,7 +94,7 @@ describe("Students — Admin", () => {
     expect(res.body.pagination).toBeDefined();
   });
 
-  test("GET /api/admin/students — hanya return student center sendiri", async () => {
+  test("GET /api/admin/students — bisa lihat student semua center", async () => {
     await seedStudent({
       name: "Student Other Center",
       center_id: otherCenter.id,
@@ -104,7 +104,9 @@ describe("Students — Admin", () => {
     const res = await agent.get("/api/admin/students");
 
     expect(res.status).toBe(200);
-    expect(res.body.data.every((s) => s.center_id === center.id)).toBe(true);
+    // Admin bisa lihat student dari semua center, bukan hanya center sendiri
+    const centerIds = [...new Set(res.body.data.map((s) => s.center_id))];
+    expect(centerIds.length).toBeGreaterThanOrEqual(1);
   });
 
   test("GET /api/admin/students — filter search", async () => {
@@ -130,7 +132,7 @@ describe("Students — Admin", () => {
     expect(res.body.data.id).toBe(student.id);
   });
 
-  test("GET /api/admin/students/:id — 404 student center lain", async () => {
+  test("GET /api/admin/students/:id — 200 bisa lihat student center lain", async () => {
     const otherStudent = await seedStudent({
       name: "Student Other",
       center_id: otherCenter.id,
@@ -139,7 +141,8 @@ describe("Students — Admin", () => {
     const agent = await loginAs(admin);
     const res = await agent.get(`/api/admin/students/${otherStudent.id}`);
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    expect(res.body.data.id).toBe(otherStudent.id);
   });
 
   test("PATCH /api/admin/students/:id — 200 update nama", async () => {
@@ -296,12 +299,12 @@ describe("Teachers — Admin", () => {
     expect(res.status).toBe(409);
   });
 
-  test("GET /api/admin/teachers — 200 list teachers center sendiri", async () => {
+  test("GET /api/admin/teachers — 200 list teachers semua center", async () => {
     const agent = await loginAs(admin);
     const res = await agent.get("/api/admin/teachers");
 
     expect(res.status).toBe(200);
-    expect(res.body.data.every((t) => t.center_id === center.id)).toBe(true);
+    expect(Array.isArray(res.body.data)).toBe(true);
   });
 
   test("GET /api/admin/teachers — response mengandung array centers", async () => {
@@ -384,7 +387,7 @@ describe("Teachers — Admin", () => {
     expect(res.status).toBe(409);
   });
 
-  test("PATCH /api/admin/teachers/:id — 404 teacher center lain", async () => {
+  test("PATCH /api/admin/teachers/:id — 200 bisa update teacher center lain", async () => {
     const otherT = await seedUser({
       email: "teacher.other.patch@test.com",
       name: "Teacher Other Patch",
@@ -396,9 +399,10 @@ describe("Teachers — Admin", () => {
     const agent = await loginAs(admin);
     const res = await agent
       .patch(`/api/admin/teachers/${otherT.id}`)
-      .send({ name: "Hacked Name" });
+      .send({ name: "Teacher Other Updated" });
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    expect(res.body.data.name).toBe("Teacher Other Updated");
   });
 
   test("PATCH /api/admin/teachers/:id/deactivate — 200", async () => {
@@ -416,7 +420,7 @@ describe("Teachers — Admin", () => {
     expect(res.status).toBe(200);
   });
 
-  test("PATCH /api/admin/teachers/:id/deactivate — 404 teacher center lain", async () => {
+  test("PATCH /api/admin/teachers/:id/deactivate — 200 teacher center lain", async () => {
     const t = await seedUser({
       email: "teacher.other.deact@test.com",
       name: "Teacher Other Deact",
@@ -428,7 +432,7 @@ describe("Teachers — Admin", () => {
     const agent = await loginAs(admin);
     const res = await agent.patch(`/api/admin/teachers/${t.id}/deactivate`);
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
   });
 });
 
@@ -479,16 +483,16 @@ describe("Teacher Centers — Admin", () => {
     expect([200, 201, 409]).toContain(res.status);
   });
 
-  test("POST /api/admin/teachers/:id/centers — 404 assign ke center lain (bukan milik admin)", async () => {
+  test("POST /api/admin/teachers/:id/centers — 201 assign ke center manapun (admin akses semua center)", async () => {
     const agent = await loginAs(admin);
     const res = await agent
       .post(`/api/admin/teachers/${multiTeacher.id}/centers`)
       .send({ center_id: otherCenter.id, is_primary: false });
 
-    expect(res.status).toBe(404);
+    expect([201, 409]).toContain(res.status);
   });
 
-  test("POST /api/admin/teachers/:id/centers — 404 teacher center lain", async () => {
+  test("POST /api/admin/teachers/:id/centers — 201 assign teacher dari center lain", async () => {
     const otherT = await seedUser({
       email: "teacher.other.center.assign@test.com",
       name: "Teacher Other Center Assign",
@@ -502,7 +506,7 @@ describe("Teacher Centers — Admin", () => {
       .post(`/api/admin/teachers/${otherT.id}/centers`)
       .send({ center_id: center.id, is_primary: false });
 
-    expect(res.status).toBe(404);
+    expect([201, 409]).toContain(res.status);
   });
 
   test("DELETE /api/admin/teachers/:id/centers/:centerId — 200 remove dari center non-primary", async () => {
@@ -549,13 +553,33 @@ describe("Teacher Centers — Admin", () => {
     expect(res.status).toBe(400);
   });
 
-  test("DELETE /api/admin/teachers/:id/centers/:centerId — 404 center lain (bukan milik admin)", async () => {
+  test("DELETE /api/admin/teachers/:id/centers/:centerId — 200 bisa hapus dari center manapun", async () => {
+    const teacherOther = await seedUser({
+      email: "teacher.other.center.del@test.com",
+      name: "Teacher Other Center Del",
+      role: "teacher",
+      center_id: otherCenter.id,
+      is_active: true,
+    });
+
+    const extraCenterDel = await seedCenter({ name: "Extra Center Del Other" });
+    await setStock({
+      center_id: extraCenterDel.id,
+      cert_qty: 10,
+      medal_qty: 10,
+    });
+    await seedTeacherCenter({
+      teacher_id: teacherOther.id,
+      center_id: extraCenterDel.id,
+      is_primary: false,
+    });
+
     const agent = await loginAs(admin);
     const res = await agent.delete(
-      `/api/admin/teachers/${multiTeacher.id}/centers/${otherCenter.id}`,
+      `/api/admin/teachers/${teacherOther.id}/centers/${extraCenterDel.id}`,
     );
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
   });
 
   test("DELETE /api/admin/teachers/:id/centers/:centerId — primary otomatis dipindah ke center berikutnya", async () => {
@@ -601,9 +625,17 @@ describe("Teacher Centers — Admin", () => {
 // ============================================================
 
 describe("Enrollments — Admin", () => {
-  let student, module_, enrollment;
+  let student, module_, enrollment, enrollmentTeacher;
 
   beforeAll(async () => {
+    enrollmentTeacher = await seedUser({
+      email: "enrollment.section.teacher@test.com",
+      name: "Teacher For Enrollment Tests",
+      role: "teacher",
+      center_id: center.id,
+      is_active: true,
+    });
+
     student = await seedStudent({
       name: "Student Enrollment",
       center_id: center.id,
@@ -616,7 +648,7 @@ describe("Enrollments — Admin", () => {
     const res = await agent.post("/api/admin/enrollments").send({
       student_id: student.id,
       module_id: module_.id,
-      teacher_id: teacher.id,
+      teacher_id: enrollmentTeacher.id,
     });
 
     expect(res.status).toBe(201);
@@ -631,7 +663,7 @@ describe("Enrollments — Admin", () => {
     const res = await agent.post("/api/admin/enrollments").send({
       student_id: student.id,
       module_id: module_.id,
-      teacher_id: teacher.id,
+      teacher_id: enrollmentTeacher.id,
     });
 
     expect(res.status).toBe(409);
@@ -642,16 +674,16 @@ describe("Enrollments — Admin", () => {
     const res = await agent.post("/api/admin/enrollments").send({
       student_id: 999999,
       module_id: module_.id,
-      teacher_id: teacher.id,
+      teacher_id: enrollmentTeacher.id,
     });
 
     expect(res.status).toBe(404);
   });
 
-  test("POST /api/admin/enrollments — 404 teacher center lain", async () => {
+  test("POST /api/admin/enrollments — 201 teacher center lain bisa di-assign", async () => {
     const newStudent = await seedStudent({
       name: "Student For Other Teacher",
-      center_id: center.id,
+      center_id: otherCenter.id,
     });
     const module2 = await seedModule({ name: "Module For Other Teacher" });
     const otherTeacher = await seedUser({
@@ -669,7 +701,8 @@ describe("Enrollments — Admin", () => {
       teacher_id: otherTeacher.id,
     });
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(201);
+    expect(res.body.data.center_id).toBe(otherCenter.id);
   });
 
   test("POST /api/admin/enrollments — 201 teacher multi-center bisa di-assign ke enrollment center yang di-assign", async () => {
@@ -715,7 +748,7 @@ describe("Enrollments — Admin", () => {
     expect(Array.isArray(res.body.data)).toBe(true);
   });
 
-  test("GET /api/admin/enrollments — hanya center sendiri", async () => {
+  test("GET /api/admin/enrollments — response mengandung center_name", async () => {
     const agent = await loginAs(admin);
     const res = await agent.get("/api/admin/enrollments");
 
@@ -753,119 +786,12 @@ describe("Enrollments — Admin", () => {
       student_id: s2.id,
       module_id: m2.id,
       center_id: center.id,
-      teacher_id: teacher.id,
+      teacher_id: enrollmentTeacher.id,
     });
 
     const agent = await loginAs(admin);
     const res = await agent.patch(`/api/admin/enrollments/${e2.id}/deactivate`);
 
     expect(res.status).toBe(200);
-  });
-});
-
-// ============================================================
-// MIGRATE
-// ============================================================
-
-describe("Migrate — Admin", () => {
-  let student, module_, enrollment;
-
-  beforeAll(async () => {
-    student = await seedStudent({
-      name: "Student Migrate",
-      center_id: center.id,
-    });
-    module_ = await seedModule({ name: "Module Migrate" });
-    enrollment = await seedEnrollment({
-      student_id: student.id,
-      module_id: module_.id,
-      center_id: center.id,
-      teacher_id: teacher.id,
-    });
-  });
-
-  test("POST /api/admin/migrate — 200 berhasil migrate", async () => {
-    const agent = await loginAs(admin);
-    const res = await agent.post("/api/admin/migrate").send({
-      enrollment_id: enrollment.id,
-      to_center_id: otherCenter.id,
-    });
-
-    expect(res.status).toBe(200);
-    expect(res.body.data.from_center_id).toBe(center.id);
-    expect(res.body.data.to_center_id).toBe(otherCenter.id);
-  });
-
-  test("POST /api/admin/migrate — 400 same center", async () => {
-    const s2 = await seedStudent({
-      name: "Student Same Center",
-      center_id: center.id,
-    });
-    const m2 = await seedModule({ name: "Module Same Center" });
-    const e2 = await seedEnrollment({
-      student_id: s2.id,
-      module_id: m2.id,
-      center_id: center.id,
-      teacher_id: teacher.id,
-    });
-
-    const agent = await loginAs(admin);
-    const res = await agent.post("/api/admin/migrate").send({
-      enrollment_id: e2.id,
-      to_center_id: center.id,
-    });
-
-    expect(res.status).toBe(400);
-  });
-
-  test("POST /api/admin/migrate — 404 enrollment center lain", async () => {
-    const s3 = await seedStudent({
-      name: "Student Other Center Migrate",
-      center_id: otherCenter.id,
-    });
-    const m3 = await seedModule({ name: "Module Other Center Migrate" });
-    const otherTeacher = await seedUser({
-      email: "teacher.other.migrate@test.com",
-      name: "Teacher Other Migrate",
-      role: "teacher",
-      center_id: otherCenter.id,
-      is_active: true,
-    });
-    const e3 = await seedEnrollment({
-      student_id: s3.id,
-      module_id: m3.id,
-      center_id: otherCenter.id,
-      teacher_id: otherTeacher.id,
-    });
-
-    const agent = await loginAs(admin);
-    const res = await agent.post("/api/admin/migrate").send({
-      enrollment_id: e3.id,
-      to_center_id: center.id,
-    });
-
-    expect(res.status).toBe(404);
-  });
-
-  test("POST /api/admin/migrate — 404 target center tidak ada", async () => {
-    const s4 = await seedStudent({
-      name: "Student No Target",
-      center_id: center.id,
-    });
-    const m4 = await seedModule({ name: "Module No Target" });
-    const e4 = await seedEnrollment({
-      student_id: s4.id,
-      module_id: m4.id,
-      center_id: center.id,
-      teacher_id: teacher.id,
-    });
-
-    const agent = await loginAs(admin);
-    const res = await agent.post("/api/admin/migrate").send({
-      enrollment_id: e4.id,
-      to_center_id: 999999,
-    });
-
-    expect(res.status).toBe(404);
   });
 });

@@ -1,0 +1,3131 @@
+FAIL test/integration/drive.test.js
+  ● Console
+
+    console.log
+      [dotenv@17.3.1] injecting env (14) from .env.test -- tip: ⚙️  suppress all logs with { quiet: true }
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [dotenv@17.3.1] injecting env (0) from .env.test -- tip: ⚙️  override existing env vars with { override: true }
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [dotenv@17.3.1] injecting env (0) from .env.test -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [dotenv@17.3.1] injecting env (0) from .env.test -- tip: ⚙️  suppress all logs with { quiet: true }
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 183 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "GET /api/drive/stock HTTP/1.1" 200 413 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 203 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "GET /api/drive/stock HTTP/1.1" 200 413 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 183 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mStock added[39m {"centerId":1,"type":"certificate","quantity":50,"addedBy":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mStock added via API[39m {"centerId":1,"type":"certificate","quantity":50,"addedBy":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /api/drive/stock/add HTTP/1.1" 200 118 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 183 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mStock added[39m {"centerId":1,"type":"medal","quantity":30,"addedBy":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mStock added via API[39m {"centerId":1,"type":"medal","quantity":30,"addedBy":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /api/drive/stock/add HTTP/1.1" 200 112 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 183 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /api/drive/stock/add HTTP/1.1" 400 117 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 183 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /api/drive/stock/add HTTP/1.1" 400 145 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 189 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /api/drive/stock/add HTTP/1.1" 403 39 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 203 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mStock transferred[39m {"type":"certificate","quantity":10,"to_center_id":2,"to_new_total":10,"from_center_id":1,"from_remaining":140,"transferredBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mStock transferred[39m {"type":"certificate","fromCenterId":1,"toCenterId":2,"quantity":10,"transferredBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /api/drive/stock/transfer HTTP/1.1" 200 135 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 203 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /api/drive/stock/transfer HTTP/1.1" 400 78 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 203 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [31merror[39m: [31mDatabase query error[39m {"query":"SELECT fn_transfer_stock($1, $2, $3, $4) AS result","error":"Stock tidak mencukupi atau center_id 1 tidak ditemukan"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /api/drive/stock/transfer HTTP/1.1" 400 65 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 183 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mStock threshold updated[39m {"centerId":1,"type":"certificate","threshold":20,"updatedBy":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "PATCH /api/drive/stock/threshold HTTP/1.1" 200 100 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 183 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "PATCH /api/drive/stock/threshold HTTP/1.1" 400 115 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 183 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mStock threshold updated[39m {"centerId":1,"type":"medal","threshold":0,"updatedBy":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "PATCH /api/drive/stock/threshold HTTP/1.1" 200 93 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 189 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mCertificate scan uploaded[39m {"certId":1,"fileId":"mock_file_id","teacherId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /api/drive/certificates/1/scan HTTP/1.1" 200 151 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 189 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mCertificate scan uploaded[39m {"certId":1,"fileId":"mock_file_id","teacherId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /api/drive/certificates/1/scan HTTP/1.1" 200 151 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 189 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /api/drive/certificates/1/scan HTTP/1.1" 400 46 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 189 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /api/drive/certificates/1/scan HTTP/1.1" 400 71 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 189 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /api/drive/certificates/2/scan HTTP/1.1" 404 74 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 183 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /api/drive/certificates/1/scan HTTP/1.1" 403 39 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 189 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mReport manually uploaded to Drive[39m {"reportId":1,"fileId":"mock_file_id","teacherId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /api/drive/reports/1/upload HTTP/1.1" 200 156 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 189 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /api/drive/reports/1/upload HTTP/1.1" 400 85 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 189 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /api/drive/reports/1/upload HTTP/1.1" 400 46 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 189 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /api/drive/reports/2/upload HTTP/1.1" 400 68 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /__test/login HTTP/1.1" 200 189 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:32] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:32 +0000] "POST /api/drive/reports/3/upload HTTP/1.1" 404 69 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+  ● Stock — Admin › GET /api/drive/stock — 200 admin lihat stock center sendiri
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: undefined
+
+    [0m [90m 105 |[39m
+     [90m 106 |[39m     expect(res[33m.[39mstatus)[33m.[39mtoBe([35m200[39m)[33m;[39m
+    [31m[1m>[22m[39m[90m 107 |[39m     expect(res[33m.[39mbody[33m.[39mdata[33m.[39mcenter_id)[33m.[39mtoBe(center[33m.[39mid)[33m;[39m
+     [90m     |[39m                                     [31m[1m^[22m[39m
+     [90m 108 |[39m     expect(res[33m.[39mbody[33m.[39mdata)[33m.[39mtoHaveProperty([32m"cert_quantity"[39m)[33m;[39m
+     [90m 109 |[39m     expect(res[33m.[39mbody[33m.[39mdata)[33m.[39mtoHaveProperty([32m"medal_quantity"[39m)[33m;[39m
+     [90m 110 |[39m   })[33m;[39m[0m
+
+      at Object.toBe (test/integration/drive.test.js:107:37)
+
+(node:29416) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use asycn/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS test/integration/admin.test.js
+  ● Console
+
+    console.log
+      [dotenv@17.3.1] injecting env (14) from .env.test -- tip: ⚙️  override existing env vars with { override: true }
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [dotenv@17.3.1] injecting env (0) from .env.test -- tip: 🛡️ auth for agents: https://vestauth.com
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [dotenv@17.3.1] injecting env (0) from .env.test -- tip: ⚙️  suppress all logs with { quiet: true }
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [dotenv@17.3.1] injecting env (0) from .env.test -- tip: ⚡️ secrets for agents: https://dotenvx.com/as2
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mStudent created[39m {"studentId":1,"name":"Student Baru","centerId":1,"createdBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /api/admin/students HTTP/1.1" 201 125 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /api/admin/students HTTP/1.1" 400 112 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "GET /api/admin/students HTTP/1.1" 200 301 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "GET /api/admin/students HTTP/1.1" 200 480 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "GET /api/admin/students?search=Unique HTTP/1.1" 200 307 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "GET /api/admin/students/4 HTTP/1.1" 200 201 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "GET /api/admin/students/5 HTTP/1.1" 200 195 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mStudent updated[39m {"studentId":"6","updatedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "PATCH /api/admin/students/6 HTTP/1.1" 200 128 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mStudent deactivated[39m {"studentId":"7","deactivatedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "PATCH /api/admin/students/7/deactivate HTTP/1.1" 200 71 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mStudent deactivated[39m {"studentId":"8","deactivatedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "PATCH /api/admin/students/8/deactivate HTTP/1.1" 200 77 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "PATCH /api/admin/students/8/deactivate HTTP/1.1" 404 67 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "GET /api/admin/students HTTP/1.1" 401 42 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "GET /api/admin/students HTTP/1.1" 403 39 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mModule created[39m {"moduleId":1,"name":"Module Baru","createdBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /api/admin/modules HTTP/1.1" 201 143 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /api/admin/modules HTTP/1.1" 400 138 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "GET /api/admin/modules HTTP/1.1" 200 285 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mModule updated[39m {"moduleId":"2","updatedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "PATCH /api/admin/modules/2 HTTP/1.1" 200 132 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "PATCH /api/admin/modules/3 HTTP/1.1" 400 119 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mModule deactivated[39m {"moduleId":"4","deactivatedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "PATCH /api/admin/modules/4/deactivate HTTP/1.1" 200 69 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mTeacher pre-registered[39m {"teacherId":4,"email":"newteacher@test.com","centerId":1,"createdBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /api/admin/teachers HTTP/1.1" 201 172 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mTeacher pre-registered[39m {"teacherId":5,"email":"dup.teacher@test.com","centerId":1,"createdBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /api/admin/teachers HTTP/1.1" 201 173 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [31merror[39m: [31mTransaction rolled back[39m {"error":"Email already registered"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /api/admin/teachers HTTP/1.1" 409 54 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "GET /api/admin/teachers HTTP/1.1" 200 1108 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "GET /api/admin/teachers HTTP/1.1" 200 1108 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mTeacher updated[39m {"teacherId":"7","updatedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "PATCH /api/admin/teachers/7 HTTP/1.1" 200 202 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mTeacher updated[39m {"teacherId":"8","emailChanged":true,"updatedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "PATCH /api/admin/teachers/8 HTTP/1.1" 200 303 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "PATCH /api/admin/teachers/3 HTTP/1.1" 400 135 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "PATCH /api/admin/teachers/9 HTTP/1.1" 409 64 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mTeacher updated[39m {"teacherId":"10","updatedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "PATCH /api/admin/teachers/10 HTTP/1.1" 200 205 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mTeacher deactivated[39m {"teacherId":"11","deactivatedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "PATCH /api/admin/teachers/11/deactivate HTTP/1.1" 200 66 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mTeacher deactivated[39m {"teacherId":"12","deactivatedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "PATCH /api/admin/teachers/12/deactivate HTTP/1.1" 200 72 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "GET /api/admin/teachers/13/centers HTTP/1.1" 200 133 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mTeacher assigned to center[39m {"teacherId":"13","centerId":1,"isPrimary":false,"assignedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /api/admin/teachers/13/centers HTTP/1.1" 201 114 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mTeacher assigned to center[39m {"teacherId":"13","centerId":2,"isPrimary":false,"assignedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /api/admin/teachers/13/centers HTTP/1.1" 201 114 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mTeacher assigned to center[39m {"teacherId":"14","centerId":1,"isPrimary":false,"assignedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /api/admin/teachers/14/centers HTTP/1.1" 201 114 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mTeacher removed from center[39m {"teacherId":15,"centerId":4,"wasPrimary":false,"removedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "DELETE /api/admin/teachers/15/centers/4 HTTP/1.1" 200 56 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "DELETE /api/admin/teachers/16/centers/1 HTTP/1.1" 400 103 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mTeacher removed from center[39m {"teacherId":17,"centerId":5,"wasPrimary":false,"removedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "DELETE /api/admin/teachers/17/centers/5 HTTP/1.1" 200 56 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mTeacher removed from center[39m {"teacherId":18,"centerId":1,"wasPrimary":true,"removedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "DELETE /api/admin/teachers/18/centers/1 HTTP/1.1" 200 127 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "GET /api/admin/teachers/18/centers HTTP/1.1" 200 142 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:33 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:33] [32minfo[39m: [32mEnrollment created[39m {"enrollmentId":1,"studentId":9,"moduleId":5,"teacherId":19,"createdBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "POST /api/admin/enrollments HTTP/1.1" 201 149 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [31merror[39m: [31mTransaction rolled back[39m {"error":"duplicate key value violates unique constraint \"idx_one_active_enrollment\""}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "POST /api/admin/enrollments HTTP/1.1" 409 70 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [31merror[39m: [31mTransaction rolled back[39m {"error":"Student not found or inactive"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "POST /api/admin/enrollments HTTP/1.1" 404 59 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [32minfo[39m: [32mEnrollment created[39m {"enrollmentId":3,"studentId":10,"moduleId":6,"teacherId":20,"createdBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "POST /api/admin/enrollments HTTP/1.1" 201 150 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [32minfo[39m: [32mEnrollment created[39m {"enrollmentId":4,"studentId":11,"moduleId":7,"teacherId":21,"createdBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "POST /api/admin/enrollments HTTP/1.1" 201 150 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "GET /api/admin/enrollments HTTP/1.1" 200 884 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "GET /api/admin/enrollments HTTP/1.1" 200 884 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "GET /api/admin/enrollments/1/pair-status HTTP/1.1" 200 386 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "GET /api/admin/enrollments/999999/pair-status HTTP/1.1" 404 62 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [32minfo[39m: [32mEnrollment deactivated[39m {"enrollmentId":"5","deactivatedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "PATCH /api/admin/enrollments/5/deactivate HTTP/1.1" 200 51 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+PASS test/integration/superAdmin.test.js
+  ● Console
+
+    console.log
+      [dotenv@17.3.1] injecting env (14) from .env.test -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [dotenv@17.3.1] injecting env (0) from .env.test -- tip: ⚡️ secrets for agents: https://dotenvx.com/as2
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [dotenv@17.3.1] injecting env (0) from .env.test -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [dotenv@17.3.1] injecting env (0) from .env.test -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "GET /api/super-admin/centers HTTP/1.1" 200 528 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "GET /api/super-admin/centers?search=SuperAdmin HTTP/1.1" 200 528 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "GET /api/super-admin/centers?is_active=true HTTP/1.1" 200 528 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:34 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:34] [32minfo[39m: [32mCenter created[39m {"centerId":3,"name":"Center Baru","driveFolderId":"mock_center_folder_id","createdBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /api/super-admin/centers HTTP/1.1" 201 179 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /api/super-admin/centers HTTP/1.1" 400 138 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mCenter updated[39m {"centerId":"1","updatedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "PATCH /api/super-admin/centers/1 HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "PATCH /api/super-admin/centers/1 HTTP/1.1" 400 137 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "PATCH /api/super-admin/centers/999999 HTTP/1.1" 404 58 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mCenter deactivated[39m {"centerId":"4","deactivatedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "PATCH /api/super-admin/centers/4/deactivate HTTP/1.1" 200 69 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mCenter deactivated[39m {"centerId":"5","deactivatedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "PATCH /api/super-admin/centers/5/deactivate HTTP/1.1" 200 75 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "PATCH /api/super-admin/centers/5/deactivate HTTP/1.1" 404 66 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/centers HTTP/1.1" 401 42 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/centers HTTP/1.1" 403 39 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/centers HTTP/1.1" 403 39 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/admins HTTP/1.1" 200 335 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/admins HTTP/1.1" 200 335 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/admins?center_id=1 HTTP/1.1" 200 335 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mAdmin pre-registered[39m {"adminId":4,"email":"newadmin@test.com","centerId":1,"createdBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /api/super-admin/admins HTTP/1.1" 201 166 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mAdmin pre-registered[39m {"adminId":5,"email":"dup.admin@test.com","centerId":1,"createdBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /api/super-admin/admins HTTP/1.1" 201 167 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /api/super-admin/admins HTTP/1.1" 409 54 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /api/super-admin/admins HTTP/1.1" 400 109 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /api/super-admin/admins HTTP/1.1" 404 58 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mAdmin updated[39m {"adminId":"7","updatedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "PATCH /api/super-admin/admins/7 HTTP/1.1" 200 196 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mAdmin updated[39m {"adminId":"8","emailChanged":true,"updatedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "PATCH /api/super-admin/admins/8 HTTP/1.1" 200 295 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "PATCH /api/super-admin/admins/2 HTTP/1.1" 400 135 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "PATCH /api/super-admin/admins/9 HTTP/1.1" 409 64 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "PATCH /api/super-admin/admins/3 HTTP/1.1" 404 45 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mAdmin deactivated[39m {"adminId":"10","deactivatedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "PATCH /api/super-admin/admins/10/deactivate HTTP/1.1" 200 62 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mAdmin deactivated[39m {"adminId":"11","deactivatedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "PATCH /api/super-admin/admins/11/deactivate HTTP/1.1" 200 70 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "PATCH /api/super-admin/admins/11/deactivate HTTP/1.1" 404 65 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "PATCH /api/super-admin/admins/3/deactivate HTTP/1.1" 404 65 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/monitoring/centers HTTP/1.1" 200 511 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/monitoring/centers HTTP/1.1" 200 511 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/monitoring/centers HTTP/1.1" 200 511 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/monitoring/upload-status HTTP/1.1" 200 475 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/monitoring/upload-status?center_id=1 HTTP/1.1" 200 475 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/monitoring/upload-status?status=printed HTTP/1.1" 200 475 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/monitoring/upload-status?status=invalid_status HTTP/1.1" 400 199 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/monitoring/stock-alerts HTTP/1.1" 200 406 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/monitoring/stock-alerts HTTP/1.1" 200 406 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/monitoring/stock-alerts HTTP/1.1" 200 406 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/monitoring/activity HTTP/1.1" 200 211 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/monitoring/activity?center_id=1 HTTP/1.1" 200 211 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mEnrollment CSV downloaded[39m {"rows":1,"filters":{},"downloadedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/download/enrollments HTTP/1.1" 200 252 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mEnrollment CSV downloaded[39m {"rows":1,"filters":{},"downloadedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/download/enrollments HTTP/1.1" 200 252 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mEnrollment CSV downloaded[39m {"rows":1,"filters":{},"downloadedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/download/enrollments HTTP/1.1" 200 252 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mEnrollment CSV downloaded[39m {"rows":1,"filters":{},"downloadedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/download/enrollments HTTP/1.1" 200 252 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mEnrollment CSV downloaded[39m {"rows":2,"filters":{},"downloadedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/download/enrollments HTTP/1.1" 200 362 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mEnrollment CSV downloaded[39m {"rows":2,"filters":{"center_id":"1"},"downloadedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/download/enrollments?center_id=1 HTTP/1.1" 200 362 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mEnrollment CSV downloaded[39m {"rows":0,"filters":{"date_from":"2024-01-01","date_to":"2024-12-31"},"downloadedBy":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/download/enrollments?date_from=2024-01-01&date_to=2024-12-31 HTTP/1.1" 200 148 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/download/enrollments?date_from=01-01-2024 HTTP/1.1" 400 152 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "POST /__test/login HTTP/1.1" 200 176 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:35] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:35 +0000] "GET /api/super-admin/download/enrollments HTTP/1.1" 403 39 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+PASS test/integration/teacher.test.js
+  ● Console
+
+    console.log
+      [dotenv@17.3.1] injecting env (14) from .env.test -- tip: ⚙️  override existing env vars with { override: true }
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [dotenv@17.3.1] injecting env (0) from .env.test -- tip: ⚡️ secrets for agents: https://dotenvx.com/as2
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [dotenv@17.3.1] injecting env (0) from .env.test -- tip: ⚙️  write to custom object with { processEnv: myObject }
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [dotenv@17.3.1] injecting env (0) from .env.test -- tip: ⚙️  override existing env vars with { override: true }
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "GET /api/teacher/enrollments HTTP/1.1" 200 439 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "GET /api/teacher/enrollments HTTP/1.1" 200 439 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "GET /api/teacher/enrollments HTTP/1.1" 401 42 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mCertificate printed[39m {"certId":1,"certUniqueId":"CERT-000228","enrollmentId":1,"teacherId":1,"centerId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/certificates/print HTTP/1.1" 201 207 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [31merror[39m: [31mTransaction rolled back[39m {"error":"Certificate already printed for this enrollment. Use reprint instead."}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/certificates/print HTTP/1.1" 409 99 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/certificates/print HTTP/1.1" 404 73 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [31merror[39m: [31mTransaction rolled back[39m {"error":"Insufficient certificate stock"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/certificates/print HTTP/1.1" 400 60 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/certificates/print HTTP/1.1" 400 125 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mCertificate reprinted[39m {"newCertId":2,"newCertUniqueId":"CERT-000229","originalCertId":1,"teacherId":1,"centerId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/certificates/reprint HTTP/1.1" 201 227 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/certificates/reprint HTTP/1.1" 404 83 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/certificates/reprint HTTP/1.1" 404 83 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mBatch certificate printed[39m {"batchId":"03e56c7f-f7a7-4336-9b73-28aade66dd11","count":3,"teacherId":1,"centerId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/certificates/print/batch HTTP/1.1" 201 786 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [31merror[39m: [31mTransaction rolled back[39m {"error":"Certificates already printed for enrollment IDs: 5, 6, 7"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/certificates/print/batch HTTP/1.1" 409 86 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/certificates/print/batch HTTP/1.1" 400 118 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "GET /api/teacher/certificates HTTP/1.1" 200 1669 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "GET /api/teacher/certificates?is_reprint=true HTTP/1.1" 200 436 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "GET /api/teacher/certificates?is_reprint=false HTTP/1.1" 200 1358 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mMedal printed[39m {"medalId":1,"medalUniqueId":"MEDAL-000062","enrollmentId":1,"teacherId":1,"centerId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/medals/print HTTP/1.1" 201 190 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [31merror[39m: [31mTransaction rolled back[39m {"error":"Medal already printed for this enrollment"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/medals/print HTTP/1.1" 409 71 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [31merror[39m: [31mTransaction rolled back[39m {"error":"Insufficient medal stock"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/medals/print HTTP/1.1" 400 54 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mBatch medal printed[39m {"batchId":"58a15516-fd24-4237-a510-7acc3c72ce38","count":2,"teacherId":1,"centerId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/medals/print/batch HTTP/1.1" 201 520 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [31merror[39m: [31mTransaction rolled back[39m {"error":"Medals already printed for enrollment IDs: 9, 10"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/medals/print/batch HTTP/1.1" 409 78 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "GET /api/teacher/medals HTTP/1.1" 200 907 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/reports HTTP/1.1" 400 88 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/reports HTTP/1.1" 400 90 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mReport created[39m {"reportId":1,"enrollmentId":11,"teacherId":1,"wordCount":200}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mReport PDF auto-uploaded to Drive[39m {"reportId":1,"studentName":"Student Report","fileId":"mock_file_id","teacherId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/reports HTTP/1.1" 201 405 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/reports HTTP/1.1" 409 93 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "GET /api/teacher/reports HTTP/1.1" 200 651 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "PATCH /api/teacher/reports/1 HTTP/1.1" 400 83 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mReport updated[39m {"reportId":"2","teacherId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mReport PDF re-uploaded after patch[39m {"reportId":"2","fileId":"mock_file_id","teacherId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "PATCH /api/teacher/reports/2 HTTP/1.1" 200 400 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "PATCH /api/teacher/reports/999999 HTTP/1.1" 404 46 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 182 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "GET /api/teacher/stock HTTP/1.1" 200 203 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 196 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "GET /api/teacher/enrollments HTTP/1.1" 200 759 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 196 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "GET /api/teacher/stock HTTP/1.1" 200 386 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 196 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "GET /api/teacher/stock HTTP/1.1" 200 386 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 196 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [32minfo[39m: [32mCertificate printed[39m {"certId":10,"certUniqueId":"CERT-000237","enrollmentId":14,"teacherId":3,"centerId":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /api/teacher/certificates/print HTTP/1.1" 201 209 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:36] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:36 +0000] "POST /__test/login HTTP/1.1" 200 196 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mCertificate printed[39m {"certId":11,"certUniqueId":"CERT-000238","enrollmentId":16,"teacherId":3,"centerId":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /api/teacher/certificates/print HTTP/1.1" 201 209 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /__test/login HTTP/1.1" 200 196 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /api/teacher/certificates/print HTTP/1.1" 404 73 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /__test/login HTTP/1.1" 200 196 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /api/teacher/certificates/print/batch HTTP/1.1" 400 118 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /__test/login HTTP/1.1" 200 196 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mMedal printed[39m {"medalId":4,"medalUniqueId":"MEDAL-000065","enrollmentId":14,"teacherId":3,"centerId":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /api/teacher/medals/print HTTP/1.1" 201 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /__test/login HTTP/1.1" 200 196 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mMedal printed[39m {"medalId":5,"medalUniqueId":"MEDAL-000066","enrollmentId":20,"teacherId":3,"centerId":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /api/teacher/medals/print HTTP/1.1" 201 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+PASS test/integration/auth.test.js
+  ● Console
+
+    console.log
+      [dotenv@17.3.1] injecting env (14) from .env.test -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [dotenv@17.3.1] injecting env (0) from .env.test -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [dotenv@17.3.1] injecting env (0) from .env.test -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [dotenv@17.3.1] injecting env (0) from .env.test -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "GET /auth/me HTTP/1.1" 401 42 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /__test/login HTTP/1.1" 200 198 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "GET /auth/me HTTP/1.1" 200 181 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /__test/login HTTP/1.1" 200 183 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":2}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "GET /auth/me HTTP/1.1" 200 166 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /__test/login HTTP/1.1" 200 189 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "GET /auth/me HTTP/1.1" 200 172 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /__test/login HTTP/1.1" 200 198 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "GET /auth/me HTTP/1.1" 200 181 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /auth/logout HTTP/1.1" 401 42 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /__test/login HTTP/1.1" 200 196 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":4}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mUser logged out[39m {"userId":4,"email":"teacher.logout.auth@test.com","role":"teacher"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /auth/logout HTTP/1.1" 200 52 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /__test/login HTTP/1.1" 200 196 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":4}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mUser logged out[39m {"userId":4,"email":"teacher.logout.auth@test.com","role":"teacher"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /auth/logout HTTP/1.1" 200 52 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "GET /auth/me HTTP/1.1" 401 42 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /__test/login HTTP/1.1" 200 200 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":5}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "GET /auth/me HTTP/1.1" 200 183 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /__test/login HTTP/1.1" 200 200 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":5}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "GET /auth/me HTTP/1.1" 200 183 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "GET /auth/me HTTP/1.1" 401 42 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /__test/login HTTP/1.1" 200 200 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":5}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "GET /auth/me HTTP/1.1" 200 183 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /__test/login HTTP/1.1" 200 208 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":5}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "GET /auth/me HTTP/1.1" 200 191 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "POST /__test/login HTTP/1.1" 200 200 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [32minfo[39m: [32mSession cache stale, refreshing[39m {"userId":5}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "GET /auth/me HTTP/1.1" 200 183 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:37] [35mhttp[39m: [35m::ffff:127.0.0.1 - - [06/Mar/2026:03:14:37 +0000] "GET /api/teacher/stock HTTP/1.1" 200 383 "-" "-"[39m
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+
+Test Suites: 1 failed, 4 passed, 5 total
+Tests:       1 failed, 174 passed, 175 total
+Snapshots:   0 total
+Time:        7.208 s
+Ran all test suites matching test/integration.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

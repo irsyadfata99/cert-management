@@ -998,15 +998,14 @@ router.post(
   async (req, res, next) => {
     try {
       const { student_id, module_id, teacher_id } = req.body;
-      const centerId = resolveCenterId(req, null);
 
       const result = await withTransaction(async (client) => {
         const [studentCheck, moduleCheck, teacherCheck] = await Promise.all([
           client.query(
-            `SELECT id FROM students
-           WHERE id = $1 AND center_id = $2 AND is_active = TRUE
+            `SELECT id, center_id FROM students
+           WHERE id = $1 AND is_active = TRUE
            FOR SHARE`,
-            [student_id, centerId],
+            [student_id],
           ),
           client.query(
             `SELECT id FROM modules
@@ -1016,13 +1015,11 @@ router.post(
           ),
           client.query(
             `SELECT u.id FROM users u
-           JOIN teacher_centers tc ON tc.teacher_id = u.id
            WHERE u.id = $1
-             AND tc.center_id = $2
              AND u.role = 'teacher'
              AND u.is_active = TRUE
            FOR SHARE`,
-            [teacher_id, centerId],
+            [teacher_id],
           ),
         ]);
 
@@ -1043,6 +1040,8 @@ router.post(
           err.status = 404;
           throw err;
         }
+
+        const centerId = studentCheck.rows[0].center_id;
 
         return client.query(
           `INSERT INTO enrollments (student_id, module_id, center_id, teacher_id)

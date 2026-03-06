@@ -99,14 +99,18 @@ afterAll(async () => {
 // ============================================================
 
 describe("Stock — Admin", () => {
-  test("GET /api/drive/stock — 200 admin lihat stock center sendiri", async () => {
+  test("GET /api/drive/stock — 200 admin lihat semua stock", async () => {
     const agent = await loginAs(admin);
     const res = await agent.get("/api/drive/stock");
 
     expect(res.status).toBe(200);
-    expect(res.body.data.center_id).toBe(center.id);
-    expect(res.body.data).toHaveProperty("cert_quantity");
-    expect(res.body.data).toHaveProperty("medal_quantity");
+    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body.data.length).toBeGreaterThanOrEqual(1);
+
+    const found = res.body.data.find((s) => s.center_id === center.id);
+    expect(found).toBeDefined();
+    expect(found).toHaveProperty("cert_quantity");
+    expect(found).toHaveProperty("medal_quantity");
   });
 
   test("GET /api/drive/stock — 200 super admin lihat semua stock", async () => {
@@ -171,8 +175,8 @@ describe("Stock — Admin", () => {
   });
 });
 
-describe("Stock Transfer — Super Admin", () => {
-  test("POST /api/drive/stock/transfer — 200 berhasil transfer", async () => {
+describe("Stock Transfer — Admin & Super Admin", () => {
+  test("POST /api/drive/stock/transfer — 200 berhasil transfer (super admin)", async () => {
     // Pastikan otherCenter punya stock record
     await pool.query(
       `INSERT INTO certificate_stock (center_id, quantity) VALUES ($1, 0)
@@ -190,6 +194,18 @@ describe("Stock Transfer — Super Admin", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.quantity).toBe(10);
+  });
+
+  test("POST /api/drive/stock/transfer — 200 berhasil transfer (admin)", async () => {
+    const agent = await loginAs(admin);
+    const res = await agent.post("/api/drive/stock/transfer").send({
+      type: "certificate",
+      from_center_id: otherCenter.id,
+      to_center_id: center.id,
+      quantity: 5,
+    });
+
+    expect(res.status).toBe(200);
   });
 
   test("POST /api/drive/stock/transfer — 400 same center", async () => {
@@ -220,8 +236,8 @@ describe("Stock Transfer — Super Admin", () => {
     await setStock({ center_id: center.id, cert_qty: 100, medal_qty: 100 });
   });
 
-  test("POST /api/drive/stock/transfer — 403 admin tidak bisa transfer", async () => {
-    const agent = await loginAs(admin);
+  test("POST /api/drive/stock/transfer — 403 teacher tidak bisa transfer", async () => {
+    const agent = await loginAs(teacher);
     const res = await agent.post("/api/drive/stock/transfer").send({
       type: "certificate",
       from_center_id: center.id,

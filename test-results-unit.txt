@@ -2,22 +2,45 @@ PASS test/unit/services/certificateService.test.js
   ● Console
 
     console.log
-      [dotenv@17.3.1] injecting env (14) from .env.test -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+      [dotenv@17.3.1] injecting env (14) from .env.test -- tip: 🤖 agentic secret storage: https://dotenvx.com/as2
 
       at _log (node_modules/dotenv/lib/main.js:139:11)
 
     console.log
-      [2026-03-05 14:50:05] [32minfo[39m: [32mCertificate printed[39m {"certId":1,"certUniqueId":"CERT-000001","enrollmentId":1,"teacherId":1}
+      [2026-03-06 10:14:16] [32minfo[39m: [32mCertificate printed[39m {"certId":1,"certUniqueId":"CERT-000001","enrollmentId":1,"teacherId":1,"centerId":1}
 
       at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
 
     console.log
-      [2026-03-05 14:50:05] [32minfo[39m: [32mBatch certificate printed[39m {"batchId":"uuid-123","count":2,"teacherId":1,"centerId":1}
+      [2026-03-06 10:14:16] [32minfo[39m: [32mBatch certificate printed[39m {"batchId":"uuid-123","count":2,"teacherId":1,"centerId":1}
 
       at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
 
     console.log
-      [2026-03-05 14:50:05] [32minfo[39m: [32mCertificate reprinted[39m {"newCertId":6,"newCertUniqueId":"CERT-000006","originalCertId":5,"teacherId":1}
+      [2026-03-06 10:14:16] [32minfo[39m: [32mCertificate reprinted[39m {"newCertId":6,"newCertUniqueId":"CERT-000006","originalCertId":5,"teacherId":1,"centerId":1}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+PASS test/unit/services/reportPdfService.test.js
+  ● Console
+
+    console.log
+      [dotenv@17.3.1] injecting env (14) from .env.test -- tip: 🤖 agentic secret storage: https://dotenvx.com/as2
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.log
+      [2026-03-06 10:14:17] [32minfo[39m: [32mReport PDF generated[39m {"studentName":"Budi Santoso","teacherName":"Pak Guru","bufferSize":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:17] [32minfo[39m: [32mReport PDF generated[39m {"studentName":"Budi Santoso","teacherName":"Pak Guru","bufferSize":3}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      [2026-03-06 10:14:17] [32minfo[39m: [32mReport PDF generated[39m {"studentName":"Budi Santoso","teacherName":"Pak Guru","bufferSize":3}
 
       at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
 
@@ -25,37 +48,37 @@ PASS test/unit/services/stockService.test.js
   ● Console
 
     console.log
-      [dotenv@17.3.1] injecting env (14) from .env.test -- tip: 🤖 agentic secret storage: https://dotenvx.com/as2
+      [dotenv@17.3.1] injecting env (14) from .env.test -- tip: ⚙️  suppress all logs with { quiet: true }
 
       at _log (node_modules/dotenv/lib/main.js:139:11)
 
     console.log
-      [2026-03-05 14:50:06] [32minfo[39m: [32mStock added[39m {"centerId":1,"type":"certificate","quantity":10,"addedBy":1}
+      [2026-03-06 10:14:17] [32minfo[39m: [32mStock added[39m {"centerId":1,"type":"certificate","quantity":10,"addedBy":1}
 
       at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
 
     console.log
-      [2026-03-05 14:50:06] [32minfo[39m: [32mStock added[39m {"centerId":1,"type":"medal","quantity":5,"addedBy":1}
+      [2026-03-06 10:14:17] [32minfo[39m: [32mStock added[39m {"centerId":1,"type":"medal","quantity":5,"addedBy":1}
 
       at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
 
     console.log
-      [2026-03-05 14:50:06] [32minfo[39m: [32mStock added[39m {"centerId":1,"type":"certificate","quantity":5,"addedBy":1}
+      [2026-03-06 10:14:17] [32minfo[39m: [32mStock added[39m {"centerId":1,"type":"certificate","quantity":5,"addedBy":1}
 
       at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
 
     console.log
-      [2026-03-05 14:50:06] [32minfo[39m: [32mStock threshold updated[39m {"centerId":1,"type":"certificate","threshold":20,"updatedBy":1}
+      [2026-03-06 10:14:17] [32minfo[39m: [32mStock threshold updated[39m {"centerId":1,"type":"certificate","threshold":20,"updatedBy":1}
 
       at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
 
     console.log
-      [2026-03-05 14:50:06] [32minfo[39m: [32mStock threshold updated[39m {"centerId":1,"type":"medal","threshold":0,"updatedBy":1}
+      [2026-03-06 10:14:17] [32minfo[39m: [32mStock threshold updated[39m {"centerId":1,"type":"medal","threshold":0,"updatedBy":1}
 
       at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
 
     console.log
-      [2026-03-05 14:50:06] [32minfo[39m: [32mStock transferred[39m {"type":"certificate","from_center_id":1,"to_center_id":2,"quantity":10,"transferredBy":1}
+      [2026-03-06 10:14:17] [32minfo[39m: [32mStock transferred[39m {"type":"certificate","from_center_id":1,"to_center_id":2,"quantity":10,"transferredBy":1}
 
       at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
 
@@ -63,17 +86,17 @@ PASS test/unit/services/medalService.test.js
   ● Console
 
     console.log
-      [dotenv@17.3.1] injecting env (14) from .env.test -- tip: 🤖 agentic secret storage: https://dotenvx.com/as2
+      [dotenv@17.3.1] injecting env (14) from .env.test -- tip: ⚙️  override existing env vars with { override: true }
 
       at _log (node_modules/dotenv/lib/main.js:139:11)
 
     console.log
-      [2026-03-05 14:50:06] [32minfo[39m: [32mMedal printed[39m {"medalId":1,"medalUniqueId":"MEDAL-000001","enrollmentId":1,"teacherId":1}
+      [2026-03-06 10:14:17] [32minfo[39m: [32mMedal printed[39m {"medalId":1,"medalUniqueId":"MEDAL-000001","enrollmentId":1,"teacherId":1,"centerId":1}
 
       at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
 
     console.log
-      [2026-03-05 14:50:06] [32minfo[39m: [32mBatch medal printed[39m {"batchId":"uuid-456","count":2,"teacherId":1,"centerId":1}
+      [2026-03-06 10:14:17] [32minfo[39m: [32mBatch medal printed[39m {"batchId":"uuid-456","count":2,"teacherId":1,"centerId":1}
 
       at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
 
@@ -81,7 +104,7 @@ PASS test/unit/helpers/queryBuilder.test.js
   ● Console
 
     console.log
-      [dotenv@17.3.1] injecting env (14) from .env.test -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+      [dotenv@17.3.1] injecting env (14) from .env.test -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
 
       at _log (node_modules/dotenv/lib/main.js:139:11)
 
@@ -89,7 +112,7 @@ PASS test/unit/helpers/wordCount.test.js
   ● Console
 
     console.log
-      [dotenv@17.3.1] injecting env (14) from .env.test -- tip: ⚙️  write to custom object with { processEnv: myObject }
+      [dotenv@17.3.1] injecting env (14) from .env.test -- tip: 🤖 agentic secret storage: https://dotenvx.com/as2
 
       at _log (node_modules/dotenv/lib/main.js:139:11)
 
@@ -97,32 +120,14 @@ PASS test/unit/helpers/paginate.test.js
   ● Console
 
     console.log
-      [dotenv@17.3.1] injecting env (14) from .env.test -- tip: 🤖 agentic secret storage: https://dotenvx.com/as2
+      [dotenv@17.3.1] injecting env (14) from .env.test -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
 
       at _log (node_modules/dotenv/lib/main.js:139:11)
 
 
-  #  C:\WINDOWS\system32\cmd.exe [12220]: void __cdecl node::contextify::CompileFunctionForCJSLoader(const FunctionCallbackInfo<Value> &) at src\node_contextify.cc:1753
-  #  Assertion failed: args[0]->IsString()
-
------ Native stack trace -----
-
- 1: 00007FF67C508E3A v8::base::CPU::num_virtual_address_bits+200074
- 2: 00007FF67C52525E node::GetCurrentEnvironment+16670
- 3: 00007FF67E1D274D v8::base::UnsignedDivisionByConstant<unsigned __int64>+734525
- 4: 000001D91808B26C 
-
------ JavaScript stack trace -----
-
-1: wrapSafe (node:internal/modules/cjs/loader:1692:18)
-2: node:internal/modules/cjs/loader:1735:20
-3: node:internal/modules/cjs/loader:1893:10
-4: node:internal/modules/cjs/loader:1481:32
-5: node:internal/modules/cjs/loader:1300:12
-6: traceSync (node:diagnostics_channel:328:14)
-7: wrapModuleLoad (node:internal/modules/cjs/loader:245:24)
-8: node:internal/modules/cjs/loader:1504:12
-9: require (node:internal/modules/helpers:152:16)
-10: _glob (C:\Users\Irsyad KN- MKW\Documents\project\cert-management\backend\node_modules\jest-runtime\build\index.js:30:16)
-
-
+Test Suites: 7 passed, 7 total
+Tests:       80 passed, 80 total
+Snapshots:   0 total
+Time:        1.088 s
+Ran all test suites matching test/unit.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
