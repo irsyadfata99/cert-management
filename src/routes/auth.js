@@ -29,7 +29,8 @@ router.get(
       role: req.user.role,
     });
 
-    res.redirect(`${process.env.CLIENT_URL}/dashboard`);
+    // Redirect ke root — RoleRedirect di frontend akan handle ke dashboard sesuai role
+    res.redirect(process.env.CLIENT_URL);
   },
 );
 
