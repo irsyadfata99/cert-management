@@ -2,11 +2,7 @@ const express = require("express");
 const { authorize } = require("../middleware/authorize");
 const { apiLimiter } = require("../middleware/rateLimiter");
 const { parsePagination, paginateResponse } = require("../helpers/paginate");
-const {
-  buildWhere,
-  buildSet,
-  buildOrderBy,
-} = require("../helpers/queryBuilder");
+const { buildWhere, buildSet, buildOrderBy } = require("../helpers/queryBuilder");
 const { query, withTransaction } = require("../config/database");
 const {
   validate,
@@ -32,271 +28,205 @@ router.use(authorize("admin", "super_admin"));
 router.use(apiLimiter);
 
 const resolveCenterId = (req, paramCenterId) => {
-  return paramCenterId ? parseInt(paramCenterId) : undefined;
+  // Jika ada explicit param (dari query/body), gunakan itu
+  if (paramCenterId) return parseInt(paramCenterId);
+  // Admin & super_admin tidak di-scope ke center tertentu
+  return undefined;
 };
 
-router.get(
-  "/students",
-  validate(listStudentsQuery, "query"),
-  async (req, res, next) => {
-    try {
-      const centerId = resolveCenterId(req, req.query.center_id);
-      const { page, limit, offset } = parsePagination(req.query);
+router.get("/students", validate(listStudentsQuery, "query"), async (req, res, next) => {
+  try {
+    const centerId = resolveCenterId(req, req.query.center_id);
+    const { page, limit, offset } = parsePagination(req.query);
 
-      const { whereClause, values } = buildWhere([
-        { col: "s.center_id", val: centerId },
-        {
-          col: "s.is_active",
-          val:
-            req.query.is_active === undefined
-              ? undefined
-              : req.query.is_active === "true",
-        },
-        {
-          col: "s.name",
-          val: req.query.search,
-          op: "ILIKE",
-          transform: (v) => `%${v}%`,
-        },
-      ]);
+    const { whereClause, values } = buildWhere([
+      { col: "s.center_id", val: centerId },
+      {
+        col: "s.is_active",
+        val: req.query.is_active === undefined ? undefined : req.query.is_active === "true",
+      },
+      {
+        col: "s.name",
+        val: req.query.search,
+        op: "ILIKE",
+        transform: (v) => `%${v}%`,
+      },
+    ]);
 
-      const orderBy = buildOrderBy(
-        req.query.sort_by,
-        req.query.sort_order,
-        ["name", "created_at"],
-        "name",
-      );
+    const orderBy = buildOrderBy(req.query.sort_by, req.query.sort_order, ["name", "created_at"], "name");
 
-      const [dataResult, countResult] = await Promise.all([
-        query(
-          `SELECT s.id, s.name, s.center_id, c.name AS center_name, s.is_active, s.created_at, s.updated_at
+    const [dataResult, countResult] = await Promise.all([
+      query(
+        `SELECT s.id, s.name, s.center_id, c.name AS center_name, s.is_active, s.created_at, s.updated_at
          FROM students s
          JOIN centers c ON c.id = s.center_id
          ${whereClause} ${orderBy}
          LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
-          [...values, limit, offset],
-        ),
-        query(
-          `SELECT COUNT(*)::int AS total FROM students s ${whereClause}`,
-          values,
-        ),
-      ]);
+        [...values, limit, offset],
+      ),
+      query(`SELECT COUNT(*)::int AS total FROM students s ${whereClause}`, values),
+    ]);
 
-      res.status(200).json({
-        success: true,
-        ...paginateResponse(
-          dataResult.rows,
-          countResult.rows[0].total,
-          page,
-          limit,
-        ),
-      });
-    } catch (err) {
-      next(err);
-    }
-  },
-);
+    res.status(200).json({
+      success: true,
+      ...paginateResponse(dataResult.rows, countResult.rows[0].total, page, limit),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
-router.get(
-  "/students/:id",
-  validate(idParam, "params"),
-  async (req, res, next) => {
-    try {
-      const centerId = resolveCenterId(req, null);
+router.get("/students/:id", validate(idParam, "params"), async (req, res, next) => {
+  try {
+    const centerId = resolveCenterId(req, null);
 
-      const result = await query(
-        `SELECT s.id, s.name, s.center_id, c.name AS center_name, s.is_active, s.created_at, s.updated_at
+    const result = await query(
+      `SELECT s.id, s.name, s.center_id, c.name AS center_name, s.is_active, s.created_at, s.updated_at
        FROM students s
        JOIN centers c ON c.id = s.center_id
        WHERE s.id = $1 ${centerId ? "AND s.center_id = $2" : ""}`,
-        centerId ? [req.params.id, centerId] : [req.params.id],
-      );
+      centerId ? [req.params.id, centerId] : [req.params.id],
+    );
 
-      if (result.rows.length === 0) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Student not found" });
-      }
-
-      res.status(200).json({ success: true, data: result.rows[0] });
-    } catch (err) {
-      next(err);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Student not found" });
     }
-  },
-);
 
-router.post(
-  "/students",
-  validate(createStudentBody),
-  async (req, res, next) => {
-    try {
-      const { name, center_id } = req.body;
-      const centerId =
-        req.user.role === "super_admin" ? center_id : req.user.center_id;
+    res.status(200).json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
 
-      if (!centerId) {
-        return res
-          .status(400)
-          .json({ success: false, message: "center_id is required" });
-      }
+router.post("/students", validate(createStudentBody), async (req, res, next) => {
+  try {
+    const { name, center_id } = req.body;
+    const centerId = req.user.role === "super_admin" ? center_id : req.user.center_id;
 
-      const centerCheck = await query(
-        `SELECT id FROM centers WHERE id = $1 AND is_active = TRUE`,
-        [centerId],
-      );
-      if (centerCheck.rows.length === 0) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Center not found or inactive" });
-      }
+    if (!centerId) {
+      return res.status(400).json({ success: false, message: "center_id is required" });
+    }
 
-      const result = await query(
-        `INSERT INTO students (name, center_id)
+    const centerCheck = await query(`SELECT id FROM centers WHERE id = $1 AND is_active = TRUE`, [centerId]);
+    if (centerCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Center not found or inactive" });
+    }
+
+    const result = await query(
+      `INSERT INTO students (name, center_id)
        VALUES ($1, $2)
        RETURNING id, name, center_id, is_active, created_at`,
-        [name, centerId],
-      );
+      [name, centerId],
+    );
 
-      logger.info("Student created", {
-        studentId: result.rows[0].id,
-        name,
-        centerId,
-        createdBy: req.user.id,
-      });
+    logger.info("Student created", {
+      studentId: result.rows[0].id,
+      name,
+      centerId,
+      createdBy: req.user.id,
+    });
 
-      res.status(201).json({ success: true, data: result.rows[0] });
-    } catch (err) {
-      next(err);
-    }
-  },
-);
+    res.status(201).json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
 
-router.patch(
-  "/students/:id",
-  validate(idParam, "params"),
-  validate(updateStudentBody),
-  async (req, res, next) => {
-    try {
-      const { name } = req.body;
-      const centerId = resolveCenterId(req, null);
+router.patch("/students/:id", validate(idParam, "params"), validate(updateStudentBody), async (req, res, next) => {
+  try {
+    const { name } = req.body;
+    const centerId = resolveCenterId(req, null);
 
-      const result = await query(
-        `UPDATE students
+    const result = await query(
+      `UPDATE students
        SET name = $1, updated_at = NOW()
        WHERE id = $2 ${centerId ? "AND center_id = $3" : ""} AND is_active = TRUE
        RETURNING id, name, center_id, is_active, updated_at`,
-        centerId ? [name, req.params.id, centerId] : [name, req.params.id],
-      );
+      centerId ? [name, req.params.id, centerId] : [name, req.params.id],
+    );
 
-      if (result.rows.length === 0) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Student not found or inactive" });
-      }
-
-      logger.info("Student updated", {
-        studentId: req.params.id,
-        updatedBy: req.user.id,
-      });
-      res.status(200).json({ success: true, data: result.rows[0] });
-    } catch (err) {
-      next(err);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Student not found or inactive" });
     }
-  },
-);
 
-router.patch(
-  "/students/:id/deactivate",
-  validate(idParam, "params"),
-  async (req, res, next) => {
-    try {
-      const centerId = resolveCenterId(req, null);
+    logger.info("Student updated", {
+      studentId: req.params.id,
+      updatedBy: req.user.id,
+    });
+    res.status(200).json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
 
-      const result = await query(
-        `UPDATE students
+router.patch("/students/:id/deactivate", validate(idParam, "params"), async (req, res, next) => {
+  try {
+    const centerId = resolveCenterId(req, null);
+
+    const result = await query(
+      `UPDATE students
        SET is_active = FALSE, updated_at = NOW()
        WHERE id = $1 ${centerId ? "AND center_id = $2" : ""} AND is_active = TRUE
        RETURNING id, name`,
-        centerId ? [req.params.id, centerId] : [req.params.id],
-      );
+      centerId ? [req.params.id, centerId] : [req.params.id],
+    );
 
-      if (result.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "Student not found or already inactive",
-        });
-      }
-
-      logger.info("Student deactivated", {
-        studentId: req.params.id,
-        deactivatedBy: req.user.id,
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Student not found or already inactive",
       });
-      res.status(200).json({
-        success: true,
-        message: `Student "${result.rows[0].name}" deactivated`,
-      });
-    } catch (err) {
-      next(err);
     }
-  },
-);
 
-router.get(
-  "/modules",
-  validate(paginationQuery, "query"),
-  async (req, res, next) => {
-    try {
-      const { page, limit, offset } = parsePagination(req.query);
-      const { whereClause, values } = buildWhere([
-        {
-          col: "is_active",
-          val:
-            req.query.is_active === undefined
-              ? undefined
-              : req.query.is_active === "true",
-        },
-        {
-          col: "name",
-          val: req.query.search,
-          op: "ILIKE",
-          transform: (v) => `%${v}%`,
-        },
-      ]);
+    logger.info("Student deactivated", {
+      studentId: req.params.id,
+      deactivatedBy: req.user.id,
+    });
+    res.status(200).json({
+      success: true,
+      message: `Student "${result.rows[0].name}" deactivated`,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
-      const orderBy = buildOrderBy(
-        req.query.sort_by,
-        req.query.sort_order,
-        ["name", "created_at"],
-        "name",
-      );
+router.get("/modules", validate(paginationQuery, "query"), async (req, res, next) => {
+  try {
+    const { page, limit, offset } = parsePagination(req.query);
+    const { whereClause, values } = buildWhere([
+      {
+        col: "is_active",
+        val: req.query.is_active === undefined ? undefined : req.query.is_active === "true",
+      },
+      {
+        col: "name",
+        val: req.query.search,
+        op: "ILIKE",
+        transform: (v) => `%${v}%`,
+      },
+    ]);
 
-      const [dataResult, countResult] = await Promise.all([
-        query(
-          `SELECT id, name, description, is_active, created_at, updated_at
+    const orderBy = buildOrderBy(req.query.sort_by, req.query.sort_order, ["name", "created_at"], "name");
+
+    const [dataResult, countResult] = await Promise.all([
+      query(
+        `SELECT id, name, description, is_active, created_at, updated_at
          FROM modules ${whereClause} ${orderBy}
          LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
-          [...values, limit, offset],
-        ),
-        query(
-          `SELECT COUNT(*)::int AS total FROM modules ${whereClause}`,
-          values,
-        ),
-      ]);
+        [...values, limit, offset],
+      ),
+      query(`SELECT COUNT(*)::int AS total FROM modules ${whereClause}`, values),
+    ]);
 
-      res.status(200).json({
-        success: true,
-        ...paginateResponse(
-          dataResult.rows,
-          countResult.rows[0].total,
-          page,
-          limit,
-        ),
-      });
-    } catch (err) {
-      next(err);
-    }
-  },
-);
+    res.status(200).json({
+      success: true,
+      ...paginateResponse(dataResult.rows, countResult.rows[0].total, page, limit),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.post("/modules", validate(createModuleBody), async (req, res, next) => {
   try {
@@ -320,252 +250,210 @@ router.post("/modules", validate(createModuleBody), async (req, res, next) => {
   }
 });
 
-router.patch(
-  "/modules/:id",
-  validate(idParam, "params"),
-  validate(updateModuleBody),
-  async (req, res, next) => {
-    try {
-      const { name, description } = req.body;
+router.patch("/modules/:id", validate(idParam, "params"), validate(updateModuleBody), async (req, res, next) => {
+  try {
+    const { name, description } = req.body;
 
-      const fields = {};
-      if (name) fields.name = name;
-      if (description !== undefined) fields.description = description ?? null;
+    const fields = {};
+    if (name) fields.name = name;
+    if (description !== undefined) fields.description = description ?? null;
 
-      const { setClause, values, nextIndex } = buildSet(fields);
+    const { setClause, values, nextIndex } = buildSet(fields);
 
-      const result = await query(
-        `UPDATE modules ${setClause}
+    const result = await query(
+      `UPDATE modules ${setClause}
        WHERE id = $${nextIndex} AND is_active = TRUE
        RETURNING id, name, description, is_active, updated_at`,
-        [...values, req.params.id],
-      );
+      [...values, req.params.id],
+    );
 
-      if (result.rows.length === 0) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Module not found or inactive" });
-      }
-
-      logger.info("Module updated", {
-        moduleId: req.params.id,
-        updatedBy: req.user.id,
-      });
-      res.status(200).json({ success: true, data: result.rows[0] });
-    } catch (err) {
-      next(err);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Module not found or inactive" });
     }
-  },
-);
 
-router.patch(
-  "/modules/:id/deactivate",
-  validate(idParam, "params"),
-  async (req, res, next) => {
-    try {
-      const result = await query(
-        `UPDATE modules SET is_active = FALSE, updated_at = NOW()
+    logger.info("Module updated", {
+      moduleId: req.params.id,
+      updatedBy: req.user.id,
+    });
+    res.status(200).json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch("/modules/:id/deactivate", validate(idParam, "params"), async (req, res, next) => {
+  try {
+    const result = await query(
+      `UPDATE modules SET is_active = FALSE, updated_at = NOW()
        WHERE id = $1 AND is_active = TRUE
        RETURNING id, name`,
-        [req.params.id],
-      );
+      [req.params.id],
+    );
 
-      if (result.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "Module not found or already inactive",
-        });
-      }
-
-      logger.info("Module deactivated", {
-        moduleId: req.params.id,
-        deactivatedBy: req.user.id,
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Module not found or already inactive",
       });
-      res.status(200).json({
-        success: true,
-        message: `Module "${result.rows[0].name}" deactivated`,
-      });
-    } catch (err) {
-      next(err);
     }
-  },
-);
 
-router.get(
-  "/teachers",
-  validate(listTeachersQuery, "query"),
-  async (req, res, next) => {
-    try {
-      const centerId = resolveCenterId(req, req.query.center_id);
-      const { page, limit, offset } = parsePagination(req.query);
+    logger.info("Module deactivated", {
+      moduleId: req.params.id,
+      deactivatedBy: req.user.id,
+    });
+    res.status(200).json({
+      success: true,
+      message: `Module "${result.rows[0].name}" deactivated`,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
-      const { whereClause, values } = buildWhere([
-        { col: "u.role", val: "teacher" },
-        {
-          col: "u.is_active",
-          val:
-            req.query.is_active === undefined
-              ? undefined
-              : req.query.is_active === "true",
-        },
-        {
-          col: "u.name",
-          val: req.query.search,
-          op: "ILIKE",
-          transform: (v) => `%${v}%`,
-        },
-      ]);
+router.get("/teachers", validate(listTeachersQuery, "query"), async (req, res, next) => {
+  try {
+    const centerId = resolveCenterId(req, req.query.center_id);
+    const { page, limit, offset } = parsePagination(req.query);
 
-      const centerFilter = centerId
-        ? `AND EXISTS (
+    const { whereClause, values } = buildWhere([
+      { col: "u.role", val: "teacher" },
+      {
+        col: "u.is_active",
+        val: req.query.is_active === undefined ? undefined : req.query.is_active === "true",
+      },
+      {
+        col: "u.name",
+        val: req.query.search,
+        op: "ILIKE",
+        transform: (v) => `%${v}%`,
+      },
+    ]);
+
+    const centerFilter = centerId
+      ? `AND EXISTS (
            SELECT 1 FROM teacher_centers tc
            WHERE tc.teacher_id = u.id AND tc.center_id = ${parseInt(centerId)}
          )`
-        : "";
+      : "";
 
-      const orderBy = buildOrderBy(
-        req.query.sort_by,
-        req.query.sort_order,
-        ["name", "created_at"],
-        "name",
-      );
+    const orderBy = buildOrderBy(req.query.sort_by, req.query.sort_order, ["name", "created_at"], "name");
 
-      const baseQuery = `
+    const baseQuery = `
       FROM users u
       LEFT JOIN centers c ON c.id = u.center_id
       ${whereClause} ${centerFilter}
     `;
 
-      const [dataResult, countResult] = await Promise.all([
-        query(
-          `SELECT u.id, u.email, u.name, u.avatar, u.center_id, c.name AS center_name,
+    const [dataResult, countResult] = await Promise.all([
+      query(
+        `SELECT u.id, u.email, u.name, u.avatar, u.center_id, c.name AS center_name,
                 u.drive_folder_id, u.is_active, u.created_at, u.updated_at
          ${baseQuery} ${orderBy}
          LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
-          [...values, limit, offset],
-        ),
-        query(`SELECT COUNT(*)::int AS total ${baseQuery}`, values),
-      ]);
+        [...values, limit, offset],
+      ),
+      query(`SELECT COUNT(*)::int AS total ${baseQuery}`, values),
+    ]);
 
-      const teacherIds = dataResult.rows.map((t) => t.id);
-      let centersMap = {};
+    const teacherIds = dataResult.rows.map((t) => t.id);
+    let centersMap = {};
 
-      if (teacherIds.length > 0) {
-        const centersResult = await query(
-          `SELECT tc.teacher_id, tc.center_id, tc.is_primary, c.name AS center_name
+    if (teacherIds.length > 0) {
+      const centersResult = await query(
+        `SELECT tc.teacher_id, tc.center_id, tc.is_primary, c.name AS center_name
          FROM teacher_centers tc
          JOIN centers c ON c.id = tc.center_id
          WHERE tc.teacher_id = ANY($1)
          ORDER BY tc.is_primary DESC, c.name`,
-          [teacherIds],
-        );
-
-        for (const row of centersResult.rows) {
-          if (!centersMap[row.teacher_id]) centersMap[row.teacher_id] = [];
-          centersMap[row.teacher_id].push({
-            center_id: row.center_id,
-            center_name: row.center_name,
-            is_primary: row.is_primary,
-          });
-        }
-      }
-
-      const data = dataResult.rows.map((t) => ({
-        ...t,
-        centers: centersMap[t.id] ?? [],
-      }));
-
-      res.status(200).json({
-        success: true,
-        ...paginateResponse(data, countResult.rows[0].total, page, limit),
-      });
-    } catch (err) {
-      next(err);
-    }
-  },
-);
-
-router.post(
-  "/teachers",
-  validate(createTeacherBody),
-  async (req, res, next) => {
-    try {
-      const { email, name, center_id } = req.body;
-      const centerId =
-        req.user.role === "super_admin" ? center_id : req.user.center_id;
-
-      if (!centerId) {
-        return res
-          .status(400)
-          .json({ success: false, message: "center_id is required" });
-      }
-
-      const centerCheck = await query(
-        `SELECT id FROM centers WHERE id = $1 AND is_active = TRUE`,
-        [centerId],
+        [teacherIds],
       );
-      if (centerCheck.rows.length === 0) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Center not found or inactive" });
-      }
 
-      const result = await withTransaction(async (client) => {
-        const userResult = await client.query(
-          `INSERT INTO users (email, name, role, center_id, is_active)
+      for (const row of centersResult.rows) {
+        if (!centersMap[row.teacher_id]) centersMap[row.teacher_id] = [];
+        centersMap[row.teacher_id].push({
+          center_id: row.center_id,
+          center_name: row.center_name,
+          is_primary: row.is_primary,
+        });
+      }
+    }
+
+    const data = dataResult.rows.map((t) => ({
+      ...t,
+      centers: centersMap[t.id] ?? [],
+    }));
+
+    res.status(200).json({
+      success: true,
+      ...paginateResponse(data, countResult.rows[0].total, page, limit),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/teachers", validate(createTeacherBody), async (req, res, next) => {
+  try {
+    const { email, name, center_id } = req.body;
+    const centerId = req.user.role === "super_admin" ? center_id : req.user.center_id;
+
+    if (!centerId) {
+      return res.status(400).json({ success: false, message: "center_id is required" });
+    }
+
+    const centerCheck = await query(`SELECT id FROM centers WHERE id = $1 AND is_active = TRUE`, [centerId]);
+    if (centerCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Center not found or inactive" });
+    }
+
+    const result = await withTransaction(async (client) => {
+      const userResult = await client.query(
+        `INSERT INTO users (email, name, role, center_id, is_active)
          VALUES ($1, $2, 'teacher', $3, FALSE)
          ON CONFLICT (email) DO NOTHING
          RETURNING id, email, name, role, center_id, is_active, created_at`,
-          [email.toLowerCase(), name, centerId],
-        );
+        [email.toLowerCase(), name, centerId],
+      );
 
-        if (userResult.rows.length === 0) {
-          const err = new Error("Email already registered");
-          err.status = 409;
-          throw err;
-        }
+      if (userResult.rows.length === 0) {
+        const err = new Error("Email already registered");
+        err.status = 409;
+        throw err;
+      }
 
-        const teacher = userResult.rows[0];
+      const teacher = userResult.rows[0];
 
-        await client.query(
-          `INSERT INTO teacher_centers (teacher_id, center_id, is_primary)
+      await client.query(
+        `INSERT INTO teacher_centers (teacher_id, center_id, is_primary)
          VALUES ($1, $2, TRUE)
          ON CONFLICT (teacher_id, center_id) DO NOTHING`,
-          [teacher.id, centerId],
-        );
+        [teacher.id, centerId],
+      );
 
-        return teacher;
-      });
+      return teacher;
+    });
 
-      logger.info("Teacher pre-registered", {
-        teacherId: result.id,
-        email,
-        centerId,
-        createdBy: req.user.id,
-      });
+    logger.info("Teacher pre-registered", {
+      teacherId: result.id,
+      email,
+      centerId,
+      createdBy: req.user.id,
+    });
 
-      res.status(201).json({ success: true, data: result });
-    } catch (err) {
-      if (err.status)
-        return res
-          .status(err.status)
-          .json({ success: false, message: err.message });
-      next(err);
-    }
-  },
-);
+    res.status(201).json({ success: true, data: result });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ success: false, message: err.message });
+    next(err);
+  }
+});
 
-router.patch(
-  "/teachers/:id",
-  validate(idParam, "params"),
-  validate(updateTeacherBody),
-  async (req, res, next) => {
-    try {
-      const { name, email } = req.body;
-      const centerId = resolveCenterId(req, null);
+router.patch("/teachers/:id", validate(idParam, "params"), validate(updateTeacherBody), async (req, res, next) => {
+  try {
+    const { name, email } = req.body;
+    const centerId = resolveCenterId(req, null);
 
-      const teacherCheck = await query(
-        `SELECT u.id, u.email FROM users u
+    const teacherCheck = await query(
+      `SELECT u.id, u.email FROM users u
        WHERE u.id = $1 AND u.role = 'teacher'
        ${
          centerId
@@ -575,161 +463,140 @@ router.patch(
             )`
            : ""
        }`,
-        centerId ? [req.params.id, centerId] : [req.params.id],
-      );
+      centerId ? [req.params.id, centerId] : [req.params.id],
+    );
 
-      if (teacherCheck.rows.length === 0) {
-        return res.status(404).json({
+    if (teacherCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Teacher not found or not in your center",
+      });
+    }
+
+    const currentTeacher = teacherCheck.rows[0];
+    const emailChanged = email && email.toLowerCase() !== currentTeacher.email;
+
+    if (emailChanged) {
+      const emailConflict = await query(`SELECT id FROM users WHERE email = $1 AND id != $2`, [email.toLowerCase(), req.params.id]);
+      if (emailConflict.rows.length > 0) {
+        return res.status(409).json({
           success: false,
-          message: "Teacher not found or not in your center",
+          message: "Email already used by another user",
         });
       }
+    }
 
-      const currentTeacher = teacherCheck.rows[0];
-      const emailChanged =
-        email && email.toLowerCase() !== currentTeacher.email;
+    const fields = {};
+    if (name) fields.name = name;
+    if (email) fields.email = email.toLowerCase();
+    if (emailChanged) {
+      fields.google_id = null;
+      fields.avatar = null;
+      fields.is_active = false;
+    }
 
-      if (emailChanged) {
-        const emailConflict = await query(
-          `SELECT id FROM users WHERE email = $1 AND id != $2`,
-          [email.toLowerCase(), req.params.id],
-        );
-        if (emailConflict.rows.length > 0) {
-          return res.status(409).json({
-            success: false,
-            message: "Email already used by another user",
-          });
-        }
-      }
+    const { setClause, values, nextIndex } = buildSet(fields);
 
-      const fields = {};
-      if (name) fields.name = name;
-      if (email) fields.email = email.toLowerCase();
-      if (emailChanged) {
-        fields.google_id = null;
-        fields.avatar = null;
-        fields.is_active = false;
-      }
-
-      const { setClause, values, nextIndex } = buildSet(fields);
-
-      const result = await query(
-        `UPDATE users ${setClause}
+    const result = await query(
+      `UPDATE users ${setClause}
        WHERE id = $${nextIndex} AND role = 'teacher'
        RETURNING id, email, name, avatar, role, center_id, is_active, updated_at`,
-        [...values, req.params.id],
-      );
+      [...values, req.params.id],
+    );
 
-      logger.info("Teacher updated", {
-        teacherId: req.params.id,
-        emailChanged,
-        updatedBy: req.user.id,
-      });
+    logger.info("Teacher updated", {
+      teacherId: req.params.id,
+      emailChanged,
+      updatedBy: req.user.id,
+    });
 
-      res.status(200).json({
-        success: true,
-        data: result.rows[0],
-        ...(emailChanged && {
-          warning:
-            "Email changed. Teacher account has been deactivated and must re-login with new email.",
-        }),
+    res.status(200).json({
+      success: true,
+      data: result.rows[0],
+      ...(emailChanged && {
+        warning: "Email changed. Teacher account has been deactivated and must re-login with new email.",
+      }),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/teachers/:id/centers", validate(idParam, "params"), validate(assignTeacherCenterBody), async (req, res, next) => {
+  try {
+    const { center_id, is_primary } = req.body;
+    const adminCenterId = resolveCenterId(req, null);
+
+    // [FIX] Admin hanya boleh assign ke centernya sendiri.
+    // Return 404 (bukan 403) agar tidak bocorkan eksistensi center lain.
+    if (adminCenterId && center_id !== adminCenterId) {
+      return res.status(404).json({
+        success: false,
+        message: "Center not found or inactive",
       });
-    } catch (err) {
-      next(err);
     }
-  },
-);
 
-router.post(
-  "/teachers/:id/centers",
-  validate(idParam, "params"),
-  validate(assignTeacherCenterBody),
-  async (req, res, next) => {
-    try {
-      const { center_id, is_primary } = req.body;
-      const adminCenterId = resolveCenterId(req, null);
-
-      // [FIX] Admin hanya boleh assign ke centernya sendiri.
-      // Return 404 (bukan 403) agar tidak bocorkan eksistensi center lain.
-      if (adminCenterId && center_id !== adminCenterId) {
-        return res.status(404).json({
-          success: false,
-          message: "Center not found or inactive",
-        });
-      }
-
-      // [FIX] Untuk admin (bukan super_admin), teacher yang di-assign harus
-      // sudah terdaftar di center admin tersebut (atau minimal teacher valid).
-      // Test "404 teacher center lain" mengharapkan bahwa teacher dari center
-      // lain tidak bisa di-assign ke center admin ini.
-      const teacherCheck = await query(
-        adminCenterId
-          ? // Admin: teacher harus sudah ada di center admin (setidaknya terdaftar
-            // di sistem dan memiliki center_id yang sama), atau kita cukup cek
-            // teacher exist dan belum assigned ke center lain yang "asing".
-            // Berdasarkan test: teacher milik center lain → 404.
-            // Artinya: teacher harus punya center_id = adminCenterId ATAU
-            // belum punya center sama sekali.
-            `SELECT id FROM users
+    // [FIX] Untuk admin (bukan super_admin), teacher yang di-assign harus
+    // sudah terdaftar di center admin tersebut (atau minimal teacher valid).
+    // Test "404 teacher center lain" mengharapkan bahwa teacher dari center
+    // lain tidak bisa di-assign ke center admin ini.
+    const teacherCheck = await query(
+      adminCenterId
+        ? // Admin: teacher harus sudah ada di center admin (setidaknya terdaftar
+          // di sistem dan memiliki center_id yang sama), atau kita cukup cek
+          // teacher exist dan belum assigned ke center lain yang "asing".
+          // Berdasarkan test: teacher milik center lain → 404.
+          // Artinya: teacher harus punya center_id = adminCenterId ATAU
+          // belum punya center sama sekali.
+          `SELECT id FROM users
              WHERE id = $1 AND role = 'teacher'
                AND (center_id = $2 OR center_id IS NULL)`
-          : `SELECT id FROM users WHERE id = $1 AND role = 'teacher'`,
-        adminCenterId ? [req.params.id, adminCenterId] : [req.params.id],
-      );
-      if (teacherCheck.rows.length === 0) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Teacher not found" });
-      }
+        : `SELECT id FROM users WHERE id = $1 AND role = 'teacher'`,
+      adminCenterId ? [req.params.id, adminCenterId] : [req.params.id],
+    );
+    if (teacherCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Teacher not found" });
+    }
 
-      const centerCheck = await query(
-        `SELECT id FROM centers WHERE id = $1 AND is_active = TRUE`,
-        [center_id],
-      );
-      if (centerCheck.rows.length === 0) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Center not found or inactive" });
-      }
+    const centerCheck = await query(`SELECT id FROM centers WHERE id = $1 AND is_active = TRUE`, [center_id]);
+    if (centerCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Center not found or inactive" });
+    }
 
-      const result = await withTransaction(async (client) => {
-        if (is_primary) {
-          await client.query(
-            `UPDATE teacher_centers SET is_primary = FALSE
+    const result = await withTransaction(async (client) => {
+      if (is_primary) {
+        await client.query(
+          `UPDATE teacher_centers SET is_primary = FALSE
            WHERE teacher_id = $1 AND is_primary = TRUE`,
-            [req.params.id],
-          );
-          await client.query(
-            `UPDATE users SET center_id = $1, updated_at = NOW() WHERE id = $2`,
-            [center_id, req.params.id],
-          );
-        }
+          [req.params.id],
+        );
+        await client.query(`UPDATE users SET center_id = $1, updated_at = NOW() WHERE id = $2`, [center_id, req.params.id]);
+      }
 
-        const insertResult = await client.query(
-          `INSERT INTO teacher_centers (teacher_id, center_id, is_primary)
+      const insertResult = await client.query(
+        `INSERT INTO teacher_centers (teacher_id, center_id, is_primary)
          VALUES ($1, $2, $3)
          ON CONFLICT (teacher_id, center_id)
          DO UPDATE SET is_primary = EXCLUDED.is_primary
          RETURNING teacher_id, center_id, is_primary, created_at`,
-          [req.params.id, center_id, is_primary ?? false],
-        );
+        [req.params.id, center_id, is_primary ?? false],
+      );
 
-        return insertResult.rows[0];
-      });
+      return insertResult.rows[0];
+    });
 
-      logger.info("Teacher assigned to center", {
-        teacherId: req.params.id,
-        centerId: center_id,
-        isPrimary: is_primary,
-        assignedBy: req.user.id,
-      });
+    logger.info("Teacher assigned to center", {
+      teacherId: req.params.id,
+      centerId: center_id,
+      isPrimary: is_primary,
+      assignedBy: req.user.id,
+    });
 
-      res.status(201).json({ success: true, data: result });
-    } catch (err) {
-      next(err);
-    }
-  },
-);
+    res.status(201).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.delete("/teachers/:id/centers/:centerId", async (req, res, next) => {
   try {
@@ -759,26 +626,19 @@ router.delete("/teachers/:id/centers/:centerId", async (req, res, next) => {
       });
     }
 
-    const countResult = await query(
-      `SELECT COUNT(*)::int AS total FROM teacher_centers WHERE teacher_id = $1`,
-      [teacherId],
-    );
+    const countResult = await query(`SELECT COUNT(*)::int AS total FROM teacher_centers WHERE teacher_id = $1`, [teacherId]);
 
     if (countResult.rows[0].total <= 1) {
       return res.status(400).json({
         success: false,
-        message:
-          "Cannot remove the only center assignment. Deactivate the teacher instead.",
+        message: "Cannot remove the only center assignment. Deactivate the teacher instead.",
       });
     }
 
     const isPrimary = assignCheck.rows[0].is_primary;
 
     await withTransaction(async (client) => {
-      await client.query(
-        `DELETE FROM teacher_centers WHERE teacher_id = $1 AND center_id = $2`,
-        [teacherId, centerId],
-      );
+      await client.query(`DELETE FROM teacher_centers WHERE teacher_id = $1 AND center_id = $2`, [teacherId, centerId]);
 
       if (isPrimary) {
         const newPrimary = await client.query(
@@ -796,10 +656,7 @@ router.delete("/teachers/:id/centers/:centerId", async (req, res, next) => {
         );
 
         if (newPrimary.rows.length > 0) {
-          await client.query(
-            `UPDATE users SET center_id = $1, updated_at = NOW() WHERE id = $2`,
-            [newPrimary.rows[0].center_id, teacherId],
-          );
+          await client.query(`UPDATE users SET center_id = $1, updated_at = NOW() WHERE id = $2`, [newPrimary.rows[0].center_id, teacherId]);
         }
       }
     });
@@ -823,26 +680,23 @@ router.delete("/teachers/:id/centers/:centerId", async (req, res, next) => {
   }
 });
 
-router.get(
-  "/teachers/:id/centers",
-  validate(idParam, "params"),
-  async (req, res, next) => {
-    try {
-      const teacherId = parseInt(req.params.id);
-      const adminCenterId = resolveCenterId(req, null);
+router.get("/teachers/:id/centers", validate(idParam, "params"), async (req, res, next) => {
+  try {
+    const teacherId = parseInt(req.params.id);
+    const adminCenterId = resolveCenterId(req, null);
 
-      if (adminCenterId) {
-        // [FIX] Cek akses: teacher harus terdaftar di center admin ATAU
-        // memiliki center_id (primary) yang sama dengan admin.
-        // Kasus: setelah DELETE primary center, teacher_centers sudah tidak
-        // mengandung adminCenterId, tapi users.center_id sudah diupdate ke
-        // center baru. Kita tetap izinkan admin melihat centers jika teacher
-        // sebelumnya memang miliknya (via users.center_id = adminCenterId
-        // di masa lalu tidak bisa dicek, jadi kita relax: izinkan jika
-        // teacher ada di center ini ATAU admin adalah yang melakukan assign).
-        // Solusi praktis: cek teacher_centers ATAU users.center_id.
-        const accessCheck = await query(
-          `SELECT 1 FROM users
+    if (adminCenterId) {
+      // [FIX] Cek akses: teacher harus terdaftar di center admin ATAU
+      // memiliki center_id (primary) yang sama dengan admin.
+      // Kasus: setelah DELETE primary center, teacher_centers sudah tidak
+      // mengandung adminCenterId, tapi users.center_id sudah diupdate ke
+      // center baru. Kita tetap izinkan admin melihat centers jika teacher
+      // sebelumnya memang miliknya (via users.center_id = adminCenterId
+      // di masa lalu tidak bisa dicek, jadi kita relax: izinkan jika
+      // teacher ada di center ini ATAU admin adalah yang melakukan assign).
+      // Solusi praktis: cek teacher_centers ATAU users.center_id.
+      const accessCheck = await query(
+        `SELECT 1 FROM users
            WHERE id = $1 AND role = 'teacher'
              AND (
                center_id = $2
@@ -851,41 +705,37 @@ router.get(
                  WHERE teacher_id = $1 AND center_id = $2
                )
              )`,
-          [teacherId, adminCenterId],
-        );
-        if (accessCheck.rows.length === 0) {
-          return res.status(404).json({
-            success: false,
-            message: "Teacher not found in your center",
-          });
-        }
+        [teacherId, adminCenterId],
+      );
+      if (accessCheck.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Teacher not found in your center",
+        });
       }
+    }
 
-      const result = await query(
-        `SELECT tc.center_id, c.name AS center_name, tc.is_primary, tc.created_at
+    const result = await query(
+      `SELECT tc.center_id, c.name AS center_name, tc.is_primary, tc.created_at
        FROM teacher_centers tc
        JOIN centers c ON c.id = tc.center_id
        WHERE tc.teacher_id = $1
        ORDER BY tc.is_primary DESC, c.name`,
-        [teacherId],
-      );
+      [teacherId],
+    );
 
-      res.status(200).json({ success: true, data: result.rows });
-    } catch (err) {
-      next(err);
-    }
-  },
-);
+    res.status(200).json({ success: true, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
 
-router.patch(
-  "/teachers/:id/deactivate",
-  validate(idParam, "params"),
-  async (req, res, next) => {
-    try {
-      const centerId = resolveCenterId(req, null);
+router.patch("/teachers/:id/deactivate", validate(idParam, "params"), async (req, res, next) => {
+  try {
+    const centerId = resolveCenterId(req, null);
 
-      const result = await query(
-        `UPDATE users
+    const result = await query(
+      `UPDATE users
        SET is_active = FALSE, updated_at = NOW()
        WHERE id = $1 AND role = 'teacher'
        ${
@@ -897,69 +747,55 @@ router.patch(
            : ""
        } AND is_active = TRUE
        RETURNING id, email, name`,
-        centerId ? [req.params.id, centerId] : [req.params.id],
-      );
+      centerId ? [req.params.id, centerId] : [req.params.id],
+    );
 
-      if (result.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "Teacher not found or already inactive",
-        });
-      }
-
-      logger.info("Teacher deactivated", {
-        teacherId: req.params.id,
-        deactivatedBy: req.user.id,
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Teacher not found or already inactive",
       });
-      res.status(200).json({
-        success: true,
-        message: `Teacher "${result.rows[0].name}" deactivated`,
-      });
-    } catch (err) {
-      next(err);
     }
-  },
-);
 
-router.get(
-  "/enrollments",
-  validate(listEnrollmentsQuery, "query"),
-  async (req, res, next) => {
-    try {
-      const centerId = resolveCenterId(req, req.query.center_id);
-      const { page, limit, offset } = parsePagination(req.query);
+    logger.info("Teacher deactivated", {
+      teacherId: req.params.id,
+      deactivatedBy: req.user.id,
+    });
+    res.status(200).json({
+      success: true,
+      message: `Teacher "${result.rows[0].name}" deactivated`,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
-      const { whereClause, values } = buildWhere([
-        { col: "e.center_id", val: centerId },
-        {
-          col: "e.teacher_id",
-          val: req.query.teacher_id
-            ? parseInt(req.query.teacher_id)
-            : undefined,
-        },
-        {
-          col: "e.module_id",
-          val: req.query.module_id ? parseInt(req.query.module_id) : undefined,
-        },
-        {
-          col: "e.is_active",
-          val:
-            req.query.is_active === undefined
-              ? true
-              : req.query.is_active === "true",
-        },
-      ]);
+router.get("/enrollments", validate(listEnrollmentsQuery, "query"), async (req, res, next) => {
+  try {
+    const centerId = resolveCenterId(req, req.query.center_id);
+    const { page, limit, offset } = parsePagination(req.query);
 
-      const orderBy = buildOrderBy(
-        req.query.sort_by,
-        req.query.sort_order,
-        ["enrolled_at", "student_name"],
-        "enrolled_at",
-      );
+    const { whereClause, values } = buildWhere([
+      { col: "e.center_id", val: centerId },
+      {
+        col: "e.teacher_id",
+        val: req.query.teacher_id ? parseInt(req.query.teacher_id) : undefined,
+      },
+      {
+        col: "e.module_id",
+        val: req.query.module_id ? parseInt(req.query.module_id) : undefined,
+      },
+      {
+        col: "e.is_active",
+        val: req.query.is_active === undefined ? true : req.query.is_active === "true",
+      },
+    ]);
 
-      const [dataResult, countResult] = await Promise.all([
-        query(
-          `SELECT e.id, s.name AS student_name, m.name AS module_name,
+    const orderBy = buildOrderBy(req.query.sort_by, req.query.sort_order, ["enrolled_at", "student_name"], "enrolled_at");
+
+    const [dataResult, countResult] = await Promise.all([
+      query(
+        `SELECT e.id, s.name AS student_name, m.name AS module_name,
                 u.name AS teacher_name, c.name AS center_name,
                 e.is_active, e.enrolled_at, e.updated_at
          FROM enrollments e
@@ -969,157 +805,130 @@ router.get(
          JOIN centers c  ON c.id = e.center_id
          ${whereClause} ${orderBy}
          LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
-          [...values, limit, offset],
-        ),
-        query(
-          `SELECT COUNT(*)::int AS total FROM enrollments e ${whereClause}`,
-          values,
-        ),
-      ]);
+        [...values, limit, offset],
+      ),
+      query(`SELECT COUNT(*)::int AS total FROM enrollments e ${whereClause}`, values),
+    ]);
 
-      res.status(200).json({
-        success: true,
-        ...paginateResponse(
-          dataResult.rows,
-          countResult.rows[0].total,
-          page,
-          limit,
-        ),
-      });
-    } catch (err) {
-      next(err);
-    }
-  },
-);
+    res.status(200).json({
+      success: true,
+      ...paginateResponse(dataResult.rows, countResult.rows[0].total, page, limit),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
-router.post(
-  "/enrollments",
-  validate(createEnrollmentBody),
-  async (req, res, next) => {
-    try {
-      const { student_id, module_id, teacher_id } = req.body;
+router.post("/enrollments", validate(createEnrollmentBody), async (req, res, next) => {
+  try {
+    const { student_id, module_id, teacher_id } = req.body;
 
-      const result = await withTransaction(async (client) => {
-        const [studentCheck, moduleCheck, teacherCheck] = await Promise.all([
-          client.query(
-            `SELECT id, center_id FROM students
+    const result = await withTransaction(async (client) => {
+      const [studentCheck, moduleCheck, teacherCheck] = await Promise.all([
+        client.query(
+          `SELECT id, center_id FROM students
            WHERE id = $1 AND is_active = TRUE
            FOR SHARE`,
-            [student_id],
-          ),
-          client.query(
-            `SELECT id FROM modules
+          [student_id],
+        ),
+        client.query(
+          `SELECT id FROM modules
            WHERE id = $1 AND is_active = TRUE
            FOR SHARE`,
-            [module_id],
-          ),
-          client.query(
-            `SELECT u.id FROM users u
+          [module_id],
+        ),
+        client.query(
+          `SELECT u.id FROM users u
            WHERE u.id = $1
              AND u.role = 'teacher'
              AND u.is_active = TRUE
            FOR SHARE`,
-            [teacher_id],
-          ),
-        ]);
+          [teacher_id],
+        ),
+      ]);
 
-        if (studentCheck.rows.length === 0) {
-          const err = new Error("Student not found or inactive");
-          err.status = 404;
-          throw err;
-        }
-        if (moduleCheck.rows.length === 0) {
-          const err = new Error("Module not found or inactive");
-          err.status = 404;
-          throw err;
-        }
-        if (teacherCheck.rows.length === 0) {
-          const err = new Error(
-            "Teacher not found, inactive, or not assigned to this center",
-          );
-          err.status = 404;
-          throw err;
-        }
+      if (studentCheck.rows.length === 0) {
+        const err = new Error("Student not found or inactive");
+        err.status = 404;
+        throw err;
+      }
+      if (moduleCheck.rows.length === 0) {
+        const err = new Error("Module not found or inactive");
+        err.status = 404;
+        throw err;
+      }
+      if (teacherCheck.rows.length === 0) {
+        const err = new Error("Teacher not found, inactive, or not assigned to this center");
+        err.status = 404;
+        throw err;
+      }
 
-        const centerId = studentCheck.rows[0].center_id;
+      const centerId = studentCheck.rows[0].center_id;
 
-        return client.query(
-          `INSERT INTO enrollments (student_id, module_id, center_id, teacher_id)
+      return client.query(
+        `INSERT INTO enrollments (student_id, module_id, center_id, teacher_id)
          VALUES ($1, $2, $3, $4)
          RETURNING id, student_id, module_id, center_id, teacher_id, is_active, enrolled_at`,
-          [student_id, module_id, centerId, teacher_id],
-        );
-      });
+        [student_id, module_id, centerId, teacher_id],
+      );
+    });
 
-      logger.info("Enrollment created", {
-        enrollmentId: result.rows[0].id,
-        studentId: student_id,
-        moduleId: module_id,
-        teacherId: teacher_id,
-        createdBy: req.user.id,
-      });
+    logger.info("Enrollment created", {
+      enrollmentId: result.rows[0].id,
+      studentId: student_id,
+      moduleId: module_id,
+      teacherId: teacher_id,
+      createdBy: req.user.id,
+    });
 
-      res.status(201).json({ success: true, data: result.rows[0] });
-    } catch (err) {
-      if (err.status)
-        return res
-          .status(err.status)
-          .json({ success: false, message: err.message });
-      if (err.code === "23505") {
-        return res.status(409).json({
-          success: false,
-          message: "Student already has an active enrollment",
-        });
-      }
-      next(err);
+    res.status(201).json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ success: false, message: err.message });
+    if (err.code === "23505") {
+      return res.status(409).json({
+        success: false,
+        message: "Student already has an active enrollment",
+      });
     }
-  },
-);
+    next(err);
+  }
+});
 
-router.patch(
-  "/enrollments/:id/deactivate",
-  validate(idParam, "params"),
-  async (req, res, next) => {
-    try {
-      const centerId = resolveCenterId(req, null);
+router.patch("/enrollments/:id/deactivate", validate(idParam, "params"), async (req, res, next) => {
+  try {
+    const centerId = resolveCenterId(req, null);
 
-      const result = await query(
-        `UPDATE enrollments
+    const result = await query(
+      `UPDATE enrollments
        SET is_active = FALSE, updated_at = NOW()
        WHERE id = $1 ${centerId ? "AND center_id = $2" : ""} AND is_active = TRUE
        RETURNING id`,
-        centerId ? [req.params.id, centerId] : [req.params.id],
-      );
+      centerId ? [req.params.id, centerId] : [req.params.id],
+    );
 
-      if (result.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "Enrollment not found or already inactive",
-        });
-      }
-
-      logger.info("Enrollment deactivated", {
-        enrollmentId: req.params.id,
-        deactivatedBy: req.user.id,
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Enrollment not found or already inactive",
       });
-      res
-        .status(200)
-        .json({ success: true, message: "Enrollment deactivated" });
-    } catch (err) {
-      next(err);
     }
-  },
-);
 
-router.get(
-  "/enrollments/:id/pair-status",
-  validate(idParam, "params"),
-  async (req, res, next) => {
-    try {
-      const centerId = resolveCenterId(req, null);
+    logger.info("Enrollment deactivated", {
+      enrollmentId: req.params.id,
+      deactivatedBy: req.user.id,
+    });
+    res.status(200).json({ success: true, message: "Enrollment deactivated" });
+  } catch (err) {
+    next(err);
+  }
+});
 
-      const result = await query(
-        `SELECT
+router.get("/enrollments/:id/pair-status", validate(idParam, "params"), async (req, res, next) => {
+  try {
+    const centerId = resolveCenterId(req, null);
+
+    const result = await query(
+      `SELECT
          e.id                                        AS enrollment_id,
          s.name                                      AS student_name,
          m.name                                      AS module_name,
@@ -1147,29 +956,26 @@ router.get(
        WHERE e.id = $1
          AND e.is_active = TRUE
          ${centerId ? "AND e.center_id = $2" : ""}`,
-        centerId ? [req.params.id, centerId] : [req.params.id],
-      );
+      centerId ? [req.params.id, centerId] : [req.params.id],
+    );
 
-      if (result.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "Enrollment not found or inactive",
-        });
-      }
-
-      const data = result.rows[0];
-      const missing = [];
-      if (!data.scan_complete) missing.push("certificate scan");
-      if (!data.report_complete) missing.push("final report on Drive");
-
-      res
-        .status(200)
-        .json({ success: true, data: { ...data, missing_items: missing } });
-    } catch (err) {
-      next(err);
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Enrollment not found or inactive",
+      });
     }
-  },
-);
+
+    const data = result.rows[0];
+    const missing = [];
+    if (!data.scan_complete) missing.push("certificate scan");
+    if (!data.report_complete) missing.push("final report on Drive");
+
+    res.status(200).json({ success: true, data: { ...data, missing_items: missing } });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ============================================================
 // MONITORING (scoped to admin's own center)
@@ -1211,12 +1017,7 @@ router.get("/monitoring/upload-status", async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      ...paginateResponse(
-        dataResult.rows,
-        countResult.rows[0].total,
-        page,
-        limit,
-      ),
+      ...paginateResponse(dataResult.rows, countResult.rows[0].total, page, limit),
     });
   } catch (err) {
     next(err);
@@ -1227,9 +1028,7 @@ router.get("/monitoring/activity", async (req, res, next) => {
   try {
     const centerId = resolveCenterId(req, req.query.center_id);
 
-    const { whereClause, values } = buildWhere([
-      { col: "center_id", val: centerId },
-    ]);
+    const { whereClause, values } = buildWhere([{ col: "center_id", val: centerId }]);
 
     const result = await query(
       `SELECT center_id, center_name, month,
@@ -1252,14 +1051,10 @@ router.get("/monitoring/stock-alerts", async (req, res, next) => {
   try {
     const centerId = resolveCenterId(req, null);
 
-    const { whereClause, values } = buildWhere([
-      { col: "center_id", val: centerId },
-    ]);
+    const { whereClause, values } = buildWhere([{ col: "center_id", val: centerId }]);
 
     // Gabung whereClause dengan filter has_alert
-    const hasAlertClause = whereClause
-      ? `${whereClause} AND has_alert = TRUE`
-      : `WHERE has_alert = TRUE`;
+    const hasAlertClause = whereClause ? `${whereClause} AND has_alert = TRUE` : `WHERE has_alert = TRUE`;
 
     const result = await query(
       `SELECT center_id, center_name,
