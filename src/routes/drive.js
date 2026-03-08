@@ -59,6 +59,15 @@ const handleMulterError = (err, req, res, next) => {
   next(err);
 };
 
+// ── Helper: resolve center_id for admin & super_admin ──────────
+// Both roles can pass center_id explicitly in body/query.
+// Falls back to req.user.center_id for backwards compat (though
+// admins typically don't have center_id on their user object).
+const resolveStockCenterId = (req, paramCenterId) => {
+  if (paramCenterId) return parseInt(paramCenterId);
+  return req.user.center_id ?? undefined;
+};
+
 router.get(
   "/stock",
   authorize("admin", "super_admin"),
@@ -83,8 +92,8 @@ router.post(
   async (req, res, next) => {
     try {
       const { type, quantity, center_id } = req.body;
-      const centerId =
-        req.user.role === "super_admin" ? center_id : req.user.center_id;
+      // [FIX] Both admin and super_admin can pass center_id explicitly in body
+      const centerId = resolveStockCenterId(req, center_id);
 
       if (!centerId) {
         return res
@@ -159,8 +168,8 @@ router.patch(
   async (req, res, next) => {
     try {
       const { type, threshold, center_id } = req.body;
-      const centerId =
-        req.user.role === "super_admin" ? center_id : req.user.center_id;
+      // [FIX] Both admin and super_admin can pass center_id explicitly in body
+      const centerId = resolveStockCenterId(req, center_id);
 
       if (!centerId) {
         return res

@@ -32,9 +32,7 @@ router.use(authorize("admin", "super_admin"));
 router.use(apiLimiter);
 
 const resolveCenterId = (req, paramCenterId) => {
-  // Jika ada explicit param (dari query/body), gunakan itu
   if (paramCenterId) return parseInt(paramCenterId);
-  // Admin & super_admin tidak di-scope ke center tertentu
   return undefined;
 };
 
@@ -134,8 +132,8 @@ router.post(
   async (req, res, next) => {
     try {
       const { name, center_id } = req.body;
-      const centerId =
-        req.user.role === "super_admin" ? center_id : req.user.center_id;
+      // [CHANGED] Admin tidak lagi terikat 1 center, pakai center_id dari body
+      const centerId = center_id;
 
       if (!centerId) {
         return res
@@ -180,15 +178,51 @@ router.patch(
   validate(updateStudentBody),
   async (req, res, next) => {
     try {
-      const { name } = req.body;
-      const centerId = resolveCenterId(req, null);
+      const { name, center_id } = req.body;
+      const studentId = req.params.id;
+
+      // [CHANGED] Jika ada request pindah center
+      if (center_id !== undefined) {
+        // Cek center tujuan valid dan aktif
+        const centerCheck = await query(
+          `SELECT id FROM centers WHERE id = $1 AND is_active = TRUE`,
+          [center_id],
+        );
+        if (centerCheck.rows.length === 0) {
+          return res
+            .status(404)
+            .json({
+              success: false,
+              message: "Target center not found or inactive",
+            });
+        }
+
+        // Cek apakah student punya enrollment aktif — jika ada, tolak pindah center
+        const activeEnrollment = await query(
+          `SELECT id FROM enrollments WHERE student_id = $1 AND is_active = TRUE`,
+          [studentId],
+        );
+        if (activeEnrollment.rows.length > 0) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Cannot move student to another center while they have an active enrollment. Deactivate the enrollment first.",
+          });
+        }
+      }
+
+      const fields = {};
+      if (name !== undefined) fields.name = name;
+      if (center_id !== undefined) fields.center_id = center_id;
+
+      const { setClause, values, nextIndex } = buildSet(fields);
 
       const result = await query(
         `UPDATE students
-       SET name = $1, updated_at = NOW()
-       WHERE id = $2 ${centerId ? "AND center_id = $3" : ""} AND is_active = TRUE
+       ${setClause}, updated_at = NOW()
+       WHERE id = $${nextIndex} AND is_active = TRUE
        RETURNING id, name, center_id, is_active, updated_at`,
-        centerId ? [name, req.params.id, centerId] : [name, req.params.id],
+        [...values, studentId],
       );
 
       if (result.rows.length === 0) {
@@ -198,9 +232,11 @@ router.patch(
       }
 
       logger.info("Student updated", {
-        studentId: req.params.id,
+        studentId,
+        centerChanged: center_id !== undefined,
         updatedBy: req.user.id,
       });
+
       res.status(200).json({ success: true, data: result.rows[0] });
     } catch (err) {
       next(err);
@@ -252,7 +288,7 @@ router.get(
       const { page, limit, offset } = parsePagination(req.query);
 
       const { whereClause, values } = buildWhere([
-        { col: "is_active", val: true }, // admin hanya lihat center aktif
+        { col: "is_active", val: true },
         {
           col: "name",
           val: req.query.search,
@@ -546,8 +582,8 @@ router.post(
   async (req, res, next) => {
     try {
       const { email, name, center_id } = req.body;
-      const centerId =
-        req.user.role === "super_admin" ? center_id : req.user.center_id;
+      // [CHANGED] Admin tidak lagi terikat 1 center, pakai center_id dari body
+      const centerId = center_id;
 
       if (!centerId) {
         return res
@@ -704,8 +740,6 @@ router.post(
       const { center_id, is_primary } = req.body;
       const adminCenterId = resolveCenterId(req, null);
 
-      // [FIX] Admin hanya boleh assign ke centernya sendiri.
-      // Return 404 (bukan 403) agar tidak bocorkan eksistensi center lain.
       if (adminCenterId && center_id !== adminCenterId) {
         return res.status(404).json({
           success: false,
@@ -713,19 +747,9 @@ router.post(
         });
       }
 
-      // [FIX] Untuk admin (bukan super_admin), teacher yang di-assign harus
-      // sudah terdaftar di center admin tersebut (atau minimal teacher valid).
-      // Test "404 teacher center lain" mengharapkan bahwa teacher dari center
-      // lain tidak bisa di-assign ke center admin ini.
       const teacherCheck = await query(
         adminCenterId
-          ? // Admin: teacher harus sudah ada di center admin (setidaknya terdaftar
-            // di sistem dan memiliki center_id yang sama), atau kita cukup cek
-            // teacher exist dan belum assigned ke center lain yang "asing".
-            // Berdasarkan test: teacher milik center lain → 404.
-            // Artinya: teacher harus punya center_id = adminCenterId ATAU
-            // belum punya center sama sekali.
-            `SELECT id FROM users
+          ? `SELECT id FROM users
              WHERE id = $1 AND role = 'teacher'
                AND (center_id = $2 OR center_id IS NULL)`
           : `SELECT id FROM users WHERE id = $1 AND role = 'teacher'`,
@@ -793,8 +817,6 @@ router.delete("/teachers/:id/centers/:centerId", async (req, res, next) => {
     const adminCenterId = resolveCenterId(req, null);
 
     if (adminCenterId && centerId !== adminCenterId) {
-      // [FIX] Return 404 (bukan 403) agar tidak bocorkan eksistensi center lain.
-      // Test expect 404 ketika admin mencoba hapus teacher dari center bukan miliknya.
       return res.status(404).json({
         success: false,
         message: "Teacher is not assigned to this center",
@@ -887,15 +909,6 @@ router.get(
       const adminCenterId = resolveCenterId(req, null);
 
       if (adminCenterId) {
-        // [FIX] Cek akses: teacher harus terdaftar di center admin ATAU
-        // memiliki center_id (primary) yang sama dengan admin.
-        // Kasus: setelah DELETE primary center, teacher_centers sudah tidak
-        // mengandung adminCenterId, tapi users.center_id sudah diupdate ke
-        // center baru. Kita tetap izinkan admin melihat centers jika teacher
-        // sebelumnya memang miliknya (via users.center_id = adminCenterId
-        // di masa lalu tidak bisa dicek, jadi kita relax: izinkan jika
-        // teacher ada di center ini ATAU admin adalah yang melakukan assign).
-        // Solusi praktis: cek teacher_centers ATAU users.center_id.
         const accessCheck = await query(
           `SELECT 1 FROM users
            WHERE id = $1 AND role = 'teacher'
@@ -1227,7 +1240,7 @@ router.get(
 );
 
 // ============================================================
-// MONITORING (scoped to admin's own center)
+// MONITORING
 // ============================================================
 
 router.get("/monitoring/upload-status", async (req, res, next) => {
@@ -1311,7 +1324,6 @@ router.get("/monitoring/stock-alerts", async (req, res, next) => {
       { col: "center_id", val: centerId },
     ]);
 
-    // Gabung whereClause dengan filter has_alert
     const hasAlertClause = whereClause
       ? `${whereClause} AND has_alert = TRUE`
       : `WHERE has_alert = TRUE`;

@@ -1,7 +1,10 @@
 -- ============================================================
 -- SCHEMA: Certificate & Medal Management System
--- Version: 3.0
--- Changelog: Tambah teacher_centers untuk multi-center support
+-- Version: 3.1
+-- Changelog:
+--   v3.0 - Tambah teacher_centers untuk multi-center support
+--   v3.1 - Fix vw_enrollment_status & vw_teacher_upload_status
+--          status values agar konsisten dengan frontend
 -- ============================================================
 
 -- EXTENSIONS
@@ -444,6 +447,12 @@ CREATE TRIGGER trg_reports_link_to_prints
 -- VIEWS
 -- ============================================================
 
+-- [CHANGED v3.1] Status values disesuaikan dengan frontend formatEnrollmentStatus:
+--   pending        → belum ada cert sama sekali
+--   cert_printed   → cert sudah dicetak
+--   scan_uploaded  → scan cert sudah diupload
+--   report_uploaded→ report sudah diupload ke Drive (complete flow)
+--   complete       → alias sama dengan report_uploaded (drive_file_id NOT NULL)
 CREATE OR REPLACE VIEW vw_enrollment_status AS
 SELECT
   e.id                                                             AS enrollment_id,
@@ -463,10 +472,10 @@ SELECT
   r.drive_uploaded_at                                              AS report_uploaded_at,
   CASE
     WHEN r.drive_file_id IS NOT NULL            THEN 'complete'
-    WHEN r.id            IS NOT NULL            THEN 'report_drafted'
+    WHEN r.id            IS NOT NULL            THEN 'report_uploaded'
     WHEN BOOL_OR(cert.scan_file_id IS NOT NULL) THEN 'scan_uploaded'
-    WHEN COUNT(DISTINCT cert.id) > 0            THEN 'printed'
-    ELSE                                             'not_started'
+    WHEN COUNT(DISTINCT cert.id) > 0            THEN 'cert_printed'
+    ELSE                                             'pending'
   END                                                              AS enrollment_status
 FROM enrollments e
 JOIN students s ON s.id = e.student_id
@@ -480,6 +489,12 @@ WHERE e.is_active = TRUE
 GROUP BY e.id, s.name, m.name, u.name, c.name,
          r.id, r.drive_file_id, r.drive_uploaded_at;
 
+-- [CHANGED v3.1] Status values disesuaikan dengan monitoringUploadQuery validator:
+--   not_started    → belum ada cert
+--   printed        → cert dicetak, belum ada scan
+--   scan_uploaded  → scan sudah ada
+--   report_drafted → report dibuat tapi belum upload ke Drive
+--   complete       → report sudah di Drive
 CREATE OR REPLACE VIEW vw_teacher_upload_status AS
 SELECT
   u.id                  AS teacher_id,
