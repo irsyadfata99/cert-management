@@ -132,7 +132,6 @@ router.post(
   async (req, res, next) => {
     try {
       const { name, center_id } = req.body;
-      // [CHANGED] Admin tidak lagi terikat 1 center, pakai center_id dari body
       const centerId = center_id;
 
       if (!centerId) {
@@ -181,23 +180,18 @@ router.patch(
       const { name, center_id } = req.body;
       const studentId = req.params.id;
 
-      // [CHANGED] Jika ada request pindah center
       if (center_id !== undefined) {
-        // Cek center tujuan valid dan aktif
         const centerCheck = await query(
           `SELECT id FROM centers WHERE id = $1 AND is_active = TRUE`,
           [center_id],
         );
         if (centerCheck.rows.length === 0) {
-          return res
-            .status(404)
-            .json({
-              success: false,
-              message: "Target center not found or inactive",
-            });
+          return res.status(404).json({
+            success: false,
+            message: "Target center not found or inactive",
+          });
         }
 
-        // Cek apakah student punya enrollment aktif — jika ada, tolak pindah center
         const activeEnrollment = await query(
           `SELECT id FROM enrollments WHERE student_id = $1 AND is_active = TRUE`,
           [studentId],
@@ -331,6 +325,34 @@ router.get(
     }
   },
 );
+
+// ── [NEW] GET /admin/stock ────────────────────────────────────
+// Return semua center stock tanpa filter has_alert.
+// Accessible oleh admin & super_admin.
+router.get("/stock", async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT
+         c.id                                          AS center_id,
+         c.name                                        AS center_name,
+         COALESCE(cs.quantity, 0)                      AS cert_stock,
+         COALESCE(cs.low_stock_threshold, 10)          AS cert_threshold,
+         COALESCE(cs.quantity, 0) <= COALESCE(cs.low_stock_threshold, 10) AS cert_low_stock,
+         COALESCE(ms.quantity, 0)                      AS medal_stock,
+         COALESCE(ms.low_stock_threshold, 10)          AS medal_threshold,
+         COALESCE(ms.quantity, 0) <= COALESCE(ms.low_stock_threshold, 10) AS medal_low_stock
+       FROM centers c
+       LEFT JOIN certificate_stock cs ON cs.center_id = c.id
+       LEFT JOIN medal_stock ms       ON ms.center_id = c.id
+       WHERE c.is_active = TRUE
+       ORDER BY c.name`,
+    );
+
+    res.status(200).json({ success: true, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.get(
   "/modules",
@@ -582,7 +604,6 @@ router.post(
   async (req, res, next) => {
     try {
       const { email, name, center_id } = req.body;
-      // [CHANGED] Admin tidak lagi terikat 1 center, pakai center_id dari body
       const centerId = center_id;
 
       if (!centerId) {
