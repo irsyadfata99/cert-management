@@ -852,4 +852,37 @@ router.get("/stock", async (req, res, next) => {
   }
 });
 
+router.get("/activity", async (req, res, next) => {
+  try {
+    const { teacherId } = teacherContext(req);
+
+    // Ambil semua center_id yang di-assign ke teacher ini
+    const centersResult = await query(
+      `SELECT center_id FROM teacher_centers WHERE teacher_id = $1`,
+      [teacherId],
+    );
+
+    if (centersResult.rows.length === 0) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    const centerIds = centersResult.rows.map((r) => r.center_id);
+
+    const result = await query(
+      `SELECT center_id, center_name, month,
+              cert_printed, cert_reprinted, cert_scan_uploaded,
+              medal_printed, total_issued
+       FROM vw_monthly_center_activity
+       WHERE center_id = ANY($1)
+       ORDER BY month DESC, center_name
+       LIMIT 120`,
+      [centerIds],
+    );
+
+    res.status(200).json({ success: true, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
