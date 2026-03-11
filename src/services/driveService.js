@@ -42,6 +42,7 @@ const createFolder = async (name, parentFolderId) => {
         mimeType: "application/vnd.google-apps.folder",
         parents: [parentFolderId],
       },
+      supportsAllDrives: true,
       fields: "id",
     }),
   );
@@ -66,6 +67,7 @@ const uploadFile = async ({ buffer, fileName, mimeType, folderId }) => {
         mimeType,
         body: readable,
       },
+      supportsAllDrives: true,
       fields: "id, name, webViewLink",
     });
   });
@@ -79,7 +81,12 @@ const uploadFile = async ({ buffer, fileName, mimeType, folderId }) => {
 
 const deleteFile = async (fileId) => {
   const drive = getDrive();
-  await withRetry(() => drive.files.delete({ fileId }));
+  await withRetry(() =>
+    drive.files.delete({
+      fileId,
+      supportsAllDrives: true,
+    }),
+  );
   logger.info("Drive file deleted", { fileId });
 };
 
@@ -89,6 +96,7 @@ const getFileMetadata = async (fileId) => {
   const response = await withRetry(() =>
     drive.files.get({
       fileId,
+      supportsAllDrives: true,
       fields: "id, name, mimeType, size, webViewLink",
     }),
   );

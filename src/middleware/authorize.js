@@ -5,8 +5,6 @@ const SESSION_CACHE_REVALIDATE_INTERVAL_MS = 30 * 1000;
 
 const authorize = (...roles) => {
   return async (req, res, next) => {
-    // [FIX] Gunakan req.isAuthenticated() dari Passport, bukan req.session.userId
-    // yang tidak pernah di-set. Passport menggunakan req.session.passport.user.
     if (!req.isAuthenticated || !req.isAuthenticated()) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
@@ -21,8 +19,6 @@ const authorize = (...roles) => {
       let user;
 
       if (!cached) {
-        // Tidak ada cache — ambil dari DB
-        // req.user sudah di-populate Passport via deserializeUser
         const userId = req.user?.id ?? req.session?.passport?.user;
 
         if (!userId) {
@@ -86,7 +82,24 @@ const authorize = (...roles) => {
           .json({ success: false, message: "Account deactivated" });
       }
 
+      // ── DEBUG LOG ──────────────────────────────────────────
+      logger.warn("authorize called", {
+        path: req.originalUrl,
+        method: req.method,
+        userId: user?.id,
+        userRole: user?.role,
+        requiredRoles: roles,
+        source: roles.length === 0 ? "isAuthenticated" : "authorize",
+      });
+      // ──────────────────────────────────────────────────────
+
       if (roles.length > 0 && !roles.includes(user.role)) {
+        logger.warn("403 Forbidden", {
+          path: req.originalUrl,
+          userId: user?.id,
+          userRole: user?.role,
+          requiredRoles: roles,
+        });
         return res.status(403).json({ success: false, message: "Forbidden" });
       }
 
