@@ -19,10 +19,10 @@ const getTemplateBytes = () => {
 };
 
 const FIELD_POSITIONS = {
-  student_name: { x: 370, y: PAGE_HEIGHT - 87.2 },
-  academic_year: { x: 370, y: PAGE_HEIGHT - 102.4 },
-  period: { x: 370, y: PAGE_HEIGHT - 117.0 },
-  teacher_name: { x: 370, y: PAGE_HEIGHT - 131.7 },
+  student_name: { x: 370, y: PAGE_HEIGHT - 85.0 },
+  academic_year: { x: 370, y: PAGE_HEIGHT - 100.2 },
+  period: { x: 370, y: PAGE_HEIGHT - 114.8 },
+  teacher_name: { x: 370, y: PAGE_HEIGHT - 129.5 },
   score_creativity: { x: 495, y: PAGE_HEIGHT - 199.2 },
   score_critical_thinking: { x: 495, y: PAGE_HEIGHT - 251.3 },
   score_attention: { x: 495, y: PAGE_HEIGHT - 303.3 },
@@ -31,17 +31,25 @@ const FIELD_POSITIONS = {
   comment: { x: 74.7, y: PAGE_HEIGHT - 504.0, maxWidth: 450 },
 };
 
+// Score box dimensions — match template box size
+// width: cover area, height: actual box height for vertical centering
+const SCORE_BOX = { width: 34, height: 40 };
+
 const FONT_SIZE_NORMAL = 9;
-const FONT_SIZE_SCORE = 9;
+const FONT_SIZE_SCORE = 10;
 const FONT_SIZE_COMMENT = 9;
 const LINE_HEIGHT = 13;
-const COMMENT_BOTTOM_Y = PAGE_HEIGHT - 585;
+// Comment stops here — leaves room for legend at bottom
+const COMMENT_BOTTOM_Y = PAGE_HEIGHT - 700;
+
 const COVER_WIDTHS = {
   student_name: 230,
   academic_year: 110,
   period: 200,
   teacher_name: 230,
 };
+
+// ── Helpers ───────────────────────────────────────────────────
 
 const normalizeText = (text) =>
   text
@@ -85,6 +93,43 @@ const truncateText = (text, font, fontSize, maxWidth) => {
   return truncated + "…";
 };
 
+// ── Draw justified text line ──────────────────────────────────
+// For the last line of a paragraph, draw normally (left-aligned).
+const drawJustifiedLine = (
+  page,
+  line,
+  x,
+  y,
+  font,
+  fontSize,
+  maxWidth,
+  isLast,
+  color,
+) => {
+  const words = line.split(" ");
+
+  if (isLast || words.length === 1) {
+    // Last line or single word: left-aligned
+    page.drawText(line, { x, y, size: fontSize, font, color });
+    return;
+  }
+
+  const totalTextWidth = words.reduce(
+    (sum, w) => sum + font.widthOfTextAtSize(w, fontSize),
+    0,
+  );
+  const totalSpaceWidth = maxWidth - totalTextWidth;
+  const spaceWidth = totalSpaceWidth / (words.length - 1);
+
+  let currentX = x;
+  for (const word of words) {
+    page.drawText(word, { x: currentX, y, size: fontSize, font, color });
+    currentX += font.widthOfTextAtSize(word, fontSize) + spaceWidth;
+  }
+};
+
+// ── Main generator ────────────────────────────────────────────
+
 const generateReportPdf = async (data) => {
   const {
     studentName,
@@ -106,8 +151,8 @@ const generateReportPdf = async (data) => {
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const page = pdfDoc.getPages()[0];
   const black = rgb(0, 0, 0);
-  const blue = rgb(0.18, 0.46, 0.71);
 
+  // ── Header fields ─────────────────────────────────────────
   const coverAndDraw = (text, posKey) => {
     if (!text) return;
     const pos = FIELD_POSITIONS[posKey];
@@ -134,6 +179,8 @@ const generateReportPdf = async (data) => {
   coverAndDraw(academicYear ?? "-", "academic_year");
   coverAndDraw(period ?? "-", "period");
   coverAndDraw(teacherName, "teacher_name");
+
+  // ── Scores — black, centered in box ───────────────────────
   const scores = [
     { key: "score_creativity", val: scoreCreativity },
     { key: "score_critical_thinking", val: scoreCriticalThinking },
@@ -145,30 +192,40 @@ const generateReportPdf = async (data) => {
   for (const { key, val } of scores) {
     if (!val) continue;
     const pos = FIELD_POSITIONS[key];
+    const label = String(val);
+    const textW = fontBold.widthOfTextAtSize(label, FONT_SIZE_SCORE);
+    // Center horizontally in box
+    const centerX = pos.x + SCORE_BOX.width / 2 - textW / 2;
+    // Center vertically in box: pos.y is top of box, shift down to middle
+    const centerY = pos.y - SCORE_BOX.height / 2 + FONT_SIZE_SCORE / 2;
 
+    // Cover placeholder only — keep rectangle small so it doesn't hide template borders
     page.drawRectangle({
       x: pos.x - 4,
       y: pos.y - 2,
-      width: 34,
+      width: SCORE_BOX.width,
       height: 14,
       color: rgb(1, 1, 1),
     });
-    page.drawText(String(val), {
-      x: pos.x,
-      y: pos.y,
+
+    page.drawText(label, {
+      x: centerX,
+      y: centerY,
       size: FONT_SIZE_SCORE,
       font: fontBold,
-      color: blue,
+      color: black,
     });
   }
 
+  // ── Comment — justified ───────────────────────────────────
   if (content) {
     const pos = FIELD_POSITIONS.comment;
 
+    // Cover placeholder text
     page.drawRectangle({
       x: pos.x,
       y: pos.y - 2,
-      width: 200,
+      width: 460,
       height: 12,
       color: rgb(1, 1, 1),
     });
@@ -176,16 +233,21 @@ const generateReportPdf = async (data) => {
     const lines = wrapText(content, font, FONT_SIZE_COMMENT, pos.maxWidth);
     let currentY = pos.y;
 
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
       if (currentY < COMMENT_BOTTOM_Y) break;
 
-      page.drawText(line, {
-        x: pos.x,
-        y: currentY,
-        size: FONT_SIZE_COMMENT,
+      const isLast = i === lines.length - 1;
+      drawJustifiedLine(
+        page,
+        lines[i],
+        pos.x,
+        currentY,
         font,
-        color: black,
-      });
+        FONT_SIZE_COMMENT,
+        pos.maxWidth,
+        isLast,
+        black,
+      );
       currentY -= LINE_HEIGHT;
     }
   }
