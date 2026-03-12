@@ -28,7 +28,6 @@ const FIELD_POSITIONS = {
   academic_year: { x: 370, y: PAGE_HEIGHT - 100.2 },
   period: { x: 370, y: PAGE_HEIGHT - 114.8 },
   teacher_name: { x: 370, y: PAGE_HEIGHT - 129.5 },
-  // Score: centerY = exact vertical center of each box from template
   score_creativity: { centerY: 636.5 },
   score_critical_thinking: { centerY: 584.5 },
   score_attention: { centerY: 532.5 },

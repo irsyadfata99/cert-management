@@ -60,9 +60,6 @@ const handleMulterError = (err, req, res, next) => {
 };
 
 // ── Helper: resolve center_id for admin & super_admin ──────────
-// Both roles can pass center_id explicitly in body/query.
-// Falls back to req.user.center_id for backwards compat (though
-// admins typically don't have center_id on their user object).
 const resolveStockCenterId = (req, paramCenterId) => {
   if (paramCenterId) return parseInt(paramCenterId);
   return req.user.center_id ?? undefined;
@@ -92,7 +89,6 @@ router.post(
   async (req, res, next) => {
     try {
       const { type, quantity, center_id } = req.body;
-      // [FIX] Both admin and super_admin can pass center_id explicitly in body
       const centerId = resolveStockCenterId(req, center_id);
 
       if (!centerId) {
@@ -168,7 +164,6 @@ router.patch(
   async (req, res, next) => {
     try {
       const { type, threshold, center_id } = req.body;
-      // [FIX] Both admin and super_admin can pass center_id explicitly in body
       const centerId = resolveStockCenterId(req, center_id);
 
       if (!centerId) {
@@ -217,11 +212,15 @@ router.post(
       const certId = parseInt(req.params.id);
       const teacherId = req.user.id;
 
-      // Validasi cert milik teacher ini
+      // ✅ FIX: Extend query to include student_name and module_name for filename
       const certCheck = await query(
-        `SELECT c.id, c.scan_file_id, c.enrollment_id
+        `SELECT c.id, c.scan_file_id, c.enrollment_id,
+                s.name AS student_name,
+                m.name AS module_name
          FROM certificates c
          JOIN enrollments e ON e.id = c.enrollment_id
+         JOIN students s    ON s.id = e.student_id
+         JOIN modules m     ON m.id = e.module_id
          WHERE c.id = $1 AND e.teacher_id = $2`,
         [certId, teacherId],
       );
@@ -256,8 +255,16 @@ router.post(
         }
       }
 
+      // ✅ FIX: Format filename → YYYY-MM-DD_Student-Name_Module-Name.ext
+      const today = new Date().toISOString().split("T")[0];
+      const safeName = cert.student_name
+        .replace(/[^a-zA-Z0-9]/g, "-")
+        .replace(/-+/g, "-");
+      const safeModule = cert.module_name
+        .replace(/[^a-zA-Z0-9]/g, "-")
+        .replace(/-+/g, "-");
       const ext = req.file.originalname.split(".").pop() || "jpg";
-      const fileName = `Scan_CERT_${certId}_${Date.now()}.${ext}`;
+      const fileName = `${today}_${safeName}_${safeModule}.${ext}`;
 
       const { fileId, fileName: uploadedName } = await driveService.uploadFile({
         buffer: req.file.buffer,
@@ -378,6 +385,50 @@ router.post(
           drive_uploaded_at: new Date().toISOString(),
         },
       });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+router.get(
+  "/reports/:id/download",
+  authorize("teacher"),
+  validate(idParam, "params"),
+  async (req, res, next) => {
+    try {
+      const reportId = parseInt(req.params.id);
+      const teacherId = req.user.id;
+
+      const reportCheck = await query(
+        `SELECT r.id, r.drive_file_id, r.drive_file_name
+         FROM reports r
+         WHERE r.id = $1 AND r.teacher_id = $2 AND r.drive_file_id IS NOT NULL`,
+        [reportId, teacherId],
+      );
+
+      if (reportCheck.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Report not found or not yet uploaded to Drive",
+        });
+      }
+
+      const { drive_file_id: fileId, drive_file_name: fileName } =
+        reportCheck.rows[0];
+
+      const buffer = await driveService.downloadFile(fileId);
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="${fileName ?? "report"}.pdf"`,
+      );
+      res.setHeader("Content-Length", buffer.length);
+
+      logger.info("Report PDF downloaded", { reportId, fileId, teacherId });
+
+      res.send(buffer);
     } catch (err) {
       next(err);
     }

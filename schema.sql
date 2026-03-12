@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS reports (
   created_at               TIMESTAMP     NOT NULL DEFAULT NOW(),
   updated_at               TIMESTAMP     NOT NULL DEFAULT NOW(),
   CONSTRAINT chk_word_count_min
-    CHECK (word_count >= 200)
+    CHECK (word_count >= 120)
 );
 
 -- 11. CERTIFICATES

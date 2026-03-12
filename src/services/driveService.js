@@ -79,6 +79,25 @@ const uploadFile = async ({ buffer, fileName, mimeType, folderId }) => {
   return { fileId, fileName: name, webViewLink };
 };
 
+const downloadFile = async (fileId) => {
+  const drive = getDrive();
+
+  const response = await withRetry(() =>
+    drive.files.get(
+      {
+        fileId,
+        alt: "media",
+        supportsAllDrives: true,
+      },
+      { responseType: "arraybuffer" },
+    ),
+  );
+
+  const buffer = Buffer.from(response.data);
+  logger.info("Drive file downloaded", { fileId, size: buffer.length });
+  return buffer;
+};
+
 const deleteFile = async (fileId) => {
   const drive = getDrive();
   await withRetry(() =>
@@ -116,6 +135,7 @@ const createTeacherFolder = async (teacherName, centerFolderId) => {
 module.exports = {
   createFolder,
   uploadFile,
+  downloadFile,
   deleteFile,
   getFileMetadata,
   createCenterFolder,

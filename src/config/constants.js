@@ -1,6 +1,6 @@
 const BATCH_MAX_SIZE = 100;
 
-const REPORT_MIN_WORD_COUNT = 200;
+const REPORT_MIN_WORD_COUNT = 120;
 
 const SCORE_VALUES = ["A+", "A", "B+", "B"];
 
