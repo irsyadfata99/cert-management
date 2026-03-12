@@ -1,19 +1,24 @@
-const { PDFDocument, rgb, StandardFonts } = require("pdf-lib");
+const { PDFDocument, rgb } = require("pdf-lib");
+const fontkit = require("@pdf-lib/fontkit");
 const fs = require("fs");
 const path = require("path");
 const logger = require("../config/logger");
 
 const PAGE_HEIGHT = 842;
 const TEMPLATE_PATH = path.join(__dirname, "../assets/template_report_ptc.pdf");
+const FONT_REGULAR_PATH = path.join(
+  __dirname,
+  "../assets/fonts/calibri-regular.ttf",
+);
+const FONT_BOLD_PATH = path.join(__dirname, "../assets/fonts/calibri-bold.ttf");
+
 let _cachedTemplateBytes = null;
 
 const getTemplateBytes = () => {
   if (_cachedTemplateBytes) return _cachedTemplateBytes;
-
   if (!fs.existsSync(TEMPLATE_PATH)) {
     throw new Error(`PDF template not found at: ${TEMPLATE_PATH}`);
   }
-
   _cachedTemplateBytes = fs.readFileSync(TEMPLATE_PATH);
   return _cachedTemplateBytes;
 };
@@ -23,22 +28,22 @@ const FIELD_POSITIONS = {
   academic_year: { x: 370, y: PAGE_HEIGHT - 100.2 },
   period: { x: 370, y: PAGE_HEIGHT - 114.8 },
   teacher_name: { x: 370, y: PAGE_HEIGHT - 129.5 },
-  score_creativity: { x: 495, y: PAGE_HEIGHT - 199.2 },
-  score_critical_thinking: { x: 495, y: PAGE_HEIGHT - 251.3 },
-  score_attention: { x: 495, y: PAGE_HEIGHT - 303.3 },
-  score_responsibility: { x: 495, y: PAGE_HEIGHT - 355.3 },
-  score_coding_skills: { x: 495, y: PAGE_HEIGHT - 407.3 },
+  // Score: centerY = exact vertical center of each box from template
+  score_creativity: { centerY: 636.5 },
+  score_critical_thinking: { centerY: 584.5 },
+  score_attention: { centerY: 532.5 },
+  score_responsibility: { centerY: 480.5 },
+  score_coding_skills: { centerY: 428.5 },
   comment: { x: 74.7, y: PAGE_HEIGHT - 504.0, maxWidth: 450 },
 };
 
-// Score box dimensions — match template box size
-// width: cover area, height: actual box height for vertical centering
-const SCORE_BOX = { width: 34, height: 40 };
+// Score box from template: x=484.5 to x=535.5, width=51
+const SCORE_BOX = { x: 484.5, width: 51 };
 
-const FONT_SIZE_NORMAL = 9;
-const FONT_SIZE_SCORE = 10;
-const FONT_SIZE_COMMENT = 9;
-const LINE_HEIGHT = 13;
+const FONT_SIZE_HEADER = 12;
+const FONT_SIZE_SCORE = 12;
+const FONT_SIZE_COMMENT = 12;
+const LINE_HEIGHT = 16;
 // Comment stops here — leaves room for legend at bottom
 const COMMENT_BOTTOM_Y = PAGE_HEIGHT - 700;
 
@@ -94,7 +99,6 @@ const truncateText = (text, font, fontSize, maxWidth) => {
 };
 
 // ── Draw justified text line ──────────────────────────────────
-// For the last line of a paragraph, draw normally (left-aligned).
 const drawJustifiedLine = (
   page,
   line,
@@ -109,7 +113,6 @@ const drawJustifiedLine = (
   const words = line.split(" ");
 
   if (isLast || words.length === 1) {
-    // Last line or single word: left-aligned
     page.drawText(line, { x, y, size: fontSize, font, color });
     return;
   }
@@ -118,8 +121,7 @@ const drawJustifiedLine = (
     (sum, w) => sum + font.widthOfTextAtSize(w, fontSize),
     0,
   );
-  const totalSpaceWidth = maxWidth - totalTextWidth;
-  const spaceWidth = totalSpaceWidth / (words.length - 1);
+  const spaceWidth = (maxWidth - totalTextWidth) / (words.length - 1);
 
   let currentX = x;
   for (const word of words) {
@@ -147,40 +149,40 @@ const generateReportPdf = async (data) => {
   const templateBytes = getTemplateBytes();
   const pdfDoc = await PDFDocument.load(templateBytes);
 
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  // Register fontkit for custom font embedding
+  pdfDoc.registerFontkit(fontkit);
+
+  // Embed Calibri fonts
+  const fontRegularBytes = fs.readFileSync(FONT_REGULAR_PATH);
+  const fontBoldBytes = fs.readFileSync(FONT_BOLD_PATH);
+  const font = await pdfDoc.embedFont(fontRegularBytes);
+  const fontBold = await pdfDoc.embedFont(fontBoldBytes);
+
   const page = pdfDoc.getPages()[0];
   const black = rgb(0, 0, 0);
 
-  // ── Header fields ─────────────────────────────────────────
-  const coverAndDraw = (text, posKey) => {
+  // ── Header fields — no background (transparent) ───────────
+  const drawHeader = (text, posKey) => {
     if (!text) return;
     const pos = FIELD_POSITIONS[posKey];
     const width = COVER_WIDTHS[posKey] || 160;
-    const safe = truncateText(String(text), font, FONT_SIZE_NORMAL, width - 4);
+    const safe = truncateText(String(text), font, FONT_SIZE_HEADER, width - 4);
 
-    page.drawRectangle({
-      x: pos.x,
-      y: pos.y - 2,
-      width,
-      height: 12,
-      color: rgb(1, 1, 1),
-    });
     page.drawText(safe, {
       x: pos.x,
       y: pos.y,
-      size: FONT_SIZE_NORMAL,
+      size: FONT_SIZE_HEADER,
       font,
       color: black,
     });
   };
 
-  coverAndDraw(studentName, "student_name");
-  coverAndDraw(academicYear ?? "-", "academic_year");
-  coverAndDraw(period ?? "-", "period");
-  coverAndDraw(teacherName, "teacher_name");
+  drawHeader(studentName, "student_name");
+  drawHeader(academicYear ?? "-", "academic_year");
+  drawHeader(period ?? "-", "period");
+  drawHeader(teacherName, "teacher_name");
 
-  // ── Scores — black, centered in box ───────────────────────
+  // ── Scores — black, centered horizontally & vertically ────
   const scores = [
     { key: "score_creativity", val: scoreCreativity },
     { key: "score_critical_thinking", val: scoreCriticalThinking },
@@ -194,39 +196,31 @@ const generateReportPdf = async (data) => {
     const pos = FIELD_POSITIONS[key];
     const label = String(val);
     const textW = fontBold.widthOfTextAtSize(label, FONT_SIZE_SCORE);
-    // Center horizontally in box
-    const centerX = pos.x + SCORE_BOX.width / 2 - textW / 2;
-    // Center vertically in box: pos.y is top of box, shift down to middle
-    const centerY = pos.y - SCORE_BOX.height / 2 + FONT_SIZE_SCORE / 2;
+    const textH = FONT_SIZE_SCORE;
 
-    // Cover placeholder only — keep rectangle small so it doesn't hide template borders
-    page.drawRectangle({
-      x: pos.x - 4,
-      y: pos.y - 2,
-      width: SCORE_BOX.width,
-      height: 14,
-      color: rgb(1, 1, 1),
-    });
+    // Exact center from template coordinates
+    const drawX = SCORE_BOX.x + SCORE_BOX.width / 2 - textW / 2;
+    const drawY = pos.centerY - textH / 2;
 
     page.drawText(label, {
-      x: centerX,
-      y: centerY,
+      x: drawX,
+      y: drawY,
       size: FONT_SIZE_SCORE,
       font: fontBold,
       color: black,
     });
   }
 
-  // ── Comment — justified ───────────────────────────────────
+  // ── Comment — Calibri Regular, justified ──────────────────
   if (content) {
     const pos = FIELD_POSITIONS.comment;
 
-    // Cover placeholder text
+    // Cover placeholder text only
     page.drawRectangle({
       x: pos.x,
       y: pos.y - 2,
       width: 460,
-      height: 12,
+      height: 14,
       color: rgb(1, 1, 1),
     });
 
