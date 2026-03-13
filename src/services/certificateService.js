@@ -3,12 +3,18 @@ const logger = require("../config/logger");
 const BATCH_MAX_SIZE = 100;
 
 const normalizeDbError = (err) => {
-  if (err.message?.includes("Insufficient certificate stock")) {
+  if (
+    err.message?.includes("Insufficient certificate stock") ||
+    err.message?.includes("Stock sertifikat tidak mencukupi")
+  ) {
     const normalized = new Error("Insufficient certificate stock");
     normalized.status = 400;
     return normalized;
   }
-  if (err.message?.includes("Insufficient medal stock")) {
+  if (
+    err.message?.includes("Insufficient medal stock") ||
+    err.message?.includes("Stock medali tidak mencukupi")
+  ) {
     const normalized = new Error("Insufficient medal stock");
     normalized.status = 400;
     return normalized;
@@ -51,6 +57,7 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
       throw err;
     }
 
+    // Decrement both certificate and medal stock
     try {
       await client.query(`SELECT fn_decrement_certificate_stock($1, 1)`, [
         centerId,
@@ -60,23 +67,37 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
       throw normalizeDbError(err);
     }
 
-    const result = await client.query(
+    // Insert certificate
+    const certResult = await client.query(
       `INSERT INTO certificates (enrollment_id, teacher_id, center_id, ptc_date, is_reprint)
        VALUES ($1, $2, $3, $4, FALSE)
        RETURNING id, cert_unique_id, enrollment_id, teacher_id, center_id, ptc_date, is_reprint, printed_at`,
       [enrollmentId, teacherId, centerId, ptcDate],
     );
 
-    const cert = result.rows[0];
-    logger.info("Certificate printed", {
+    const cert = certResult.rows[0];
+
+    // Insert medal (bundled with certificate print)
+    const medalResult = await client.query(
+      `INSERT INTO medals (enrollment_id, teacher_id, center_id, ptc_date)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, medal_unique_id`,
+      [enrollmentId, teacherId, centerId, ptcDate],
+    );
+
+    const medal = medalResult.rows[0];
+
+    logger.info("Certificate and medal printed", {
       certId: cert.id,
       certUniqueId: cert.cert_unique_id,
+      medalId: medal.id,
+      medalUniqueId: medal.medal_unique_id,
       enrollmentId,
       teacherId,
       centerId,
     });
 
-    return cert;
+    return { ...cert, medal };
   });
 };
 
@@ -115,14 +136,14 @@ const printBatch = async ({ items, teacherId, centerId }) => {
       throw err;
     }
 
-    const alreadyPrinted = await client.query(
+    const alreadyPrintedCert = await client.query(
       `SELECT enrollment_id FROM certificates
        WHERE enrollment_id = ANY($1) AND is_reprint = FALSE`,
       [enrollmentIds],
     );
 
-    if (alreadyPrinted.rows.length > 0) {
-      const ids = alreadyPrinted.rows.map((r) => r.enrollment_id);
+    if (alreadyPrintedCert.rows.length > 0) {
+      const ids = alreadyPrintedCert.rows.map((r) => r.enrollment_id);
       const err = new Error(
         `Certificates already printed for enrollment IDs: ${ids.join(", ")}`,
       );
@@ -130,6 +151,21 @@ const printBatch = async ({ items, teacherId, centerId }) => {
       throw err;
     }
 
+    const alreadyPrintedMedal = await client.query(
+      `SELECT enrollment_id FROM medals WHERE enrollment_id = ANY($1)`,
+      [enrollmentIds],
+    );
+
+    if (alreadyPrintedMedal.rows.length > 0) {
+      const ids = alreadyPrintedMedal.rows.map((r) => r.enrollment_id);
+      const err = new Error(
+        `Medals already printed for enrollment IDs: ${ids.join(", ")}`,
+      );
+      err.status = 409;
+      throw err;
+    }
+
+    // Decrement both stocks
     try {
       await client.query(`SELECT fn_decrement_certificate_stock($1, $2)`, [
         centerId,
@@ -148,14 +184,15 @@ const printBatch = async ({ items, teacherId, centerId }) => {
     );
     const batchId = batchIdResult.rows[0].batch_id;
 
-    const valuePlaceholders = items
+    // Batch insert certificates
+    const certPlaceholders = items
       .map(
         (_, i) =>
           `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, FALSE, $${i * 5 + 5})`,
       )
       .join(", ");
 
-    const flatValues = items.flatMap((item) => [
+    const certValues = items.flatMap((item) => [
       item.enrollmentId,
       teacherId,
       centerId,
@@ -163,22 +200,47 @@ const printBatch = async ({ items, teacherId, centerId }) => {
       batchId,
     ]);
 
-    const result = await client.query(
+    const certResult = await client.query(
       `INSERT INTO certificates (enrollment_id, teacher_id, center_id, ptc_date, is_reprint, batch_id)
-       VALUES ${valuePlaceholders}
+       VALUES ${certPlaceholders}
        RETURNING id, cert_unique_id, enrollment_id, teacher_id, center_id, ptc_date, is_reprint, batch_id, printed_at`,
-      flatValues,
+      certValues,
     );
 
-    const certs = result.rows;
-    logger.info("Batch certificate printed", {
+    // Batch insert medals (bundled)
+    const medalPlaceholders = items
+      .map(
+        (_, i) =>
+          `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, $${i * 5 + 5})`,
+      )
+      .join(", ");
+
+    const medalValues = items.flatMap((item) => [
+      item.enrollmentId,
+      teacherId,
+      centerId,
+      item.ptcDate,
+      batchId,
+    ]);
+
+    const medalResult = await client.query(
+      `INSERT INTO medals (enrollment_id, teacher_id, center_id, ptc_date, batch_id)
+       VALUES ${medalPlaceholders}
+       RETURNING id, medal_unique_id, enrollment_id`,
+      medalValues,
+    );
+
+    const certs = certResult.rows;
+    const medals = medalResult.rows;
+
+    logger.info("Batch certificate and medal printed", {
       batchId,
       count: certs.length,
       teacherId,
       centerId,
     });
 
-    return { batchId, certs };
+    return { batchId, certs, medals };
   });
 };
 
@@ -209,7 +271,7 @@ const reprint = async ({ originalCertId, teacherId, centerId, ptcDate }) => {
 
     const { enrollment_id: enrollmentId } = original.rows[0];
 
-    // Reprint: hanya kurangi certificate stock, medal tidak berkurang
+    // Reprint: only decrement certificate stock, medal stock unchanged
     try {
       await client.query(`SELECT fn_decrement_certificate_stock($1, 1)`, [
         centerId,

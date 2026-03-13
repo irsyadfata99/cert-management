@@ -157,7 +157,6 @@ const createEnrollmentBody = z.object({
     .positive(),
 });
 
-// [CHANGED] Tambah enrollment_status filter, hapus is_active filter
 const listEnrollmentsQuery = paginationQuery.extend({
   center_id: z.string().regex(/^\d+$/).optional(),
   teacher_id: z.string().regex(/^\d+$/).optional(),
@@ -204,27 +203,6 @@ const reprintCertBody = z.object({
 
 const listCertsQuery = paginationQuery.extend({
   is_reprint: z.enum(["true", "false"]).optional(),
-});
-
-const printMedalBody = z.object({
-  enrollment_id: z
-    .number({ required_error: "enrollment_id is required" })
-    .int()
-    .positive(),
-  ptc_date: ptcDateSchema,
-});
-
-const printMedalBatchBody = z.object({
-  items: z
-    .array(
-      z.object({
-        enrollment_id: z.number().int().positive(),
-        ptc_date: ptcDateSchema,
-      }),
-      { required_error: "items array is required" },
-    )
-    .min(1, "At least one item is required")
-    .max(100, "Batch size cannot exceed 100"),
 });
 
 const createReportBody = z.object({
@@ -346,8 +324,6 @@ module.exports = {
   printCertBatchBody,
   reprintCertBody,
   listCertsQuery,
-  printMedalBody,
-  printMedalBatchBody,
   createReportBody,
   updateReportBody,
   addStockBody,

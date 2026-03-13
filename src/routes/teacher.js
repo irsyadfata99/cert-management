@@ -10,14 +10,11 @@ const {
   printCertBatchBody,
   reprintCertBody,
   listCertsQuery,
-  printMedalBody,
-  printMedalBatchBody,
   createReportBody,
   updateReportBody,
   idParam,
 } = require("../validators");
 const certificateService = require("../services/certificateService");
-const medalService = require("../services/medalService");
 const driveService = require("../services/driveService");
 const { generateReportPdf } = require("../services/reportPdfService");
 const { query } = require("../config/database");
@@ -71,7 +68,6 @@ router.get("/enrollments", async (req, res, next) => {
          JOIN modules m   ON m.id = e.module_id
          JOIN centers c   ON c.id = e.center_id
          JOIN vw_enrollment_status es ON es.enrollment_id = e.id
-         -- [MULTI-CENTER] Tampilkan enrollment di semua center yang di-assign
          WHERE e.teacher_id = $1
            AND e.is_active = TRUE
            AND EXISTS (
@@ -126,14 +122,14 @@ router.post(
         });
       }
 
-      const cert = await certificateService.printSingle({
+      const result = await certificateService.printSingle({
         enrollmentId: enrollment_id,
         teacherId,
         centerId,
         ptcDate: ptc_date,
       });
 
-      res.status(201).json({ success: true, data: cert });
+      res.status(201).json({ success: true, data: result });
     } catch (err) {
       if (err.status)
         return res
@@ -271,116 +267,6 @@ router.get(
     }
   },
 );
-
-router.post(
-  "/medals/print",
-  printLimiter,
-  validate(printMedalBody),
-  async (req, res, next) => {
-    try {
-      const { teacherId } = teacherContext(req);
-      const { enrollment_id, ptc_date } = req.body;
-
-      const centerId = await resolveEnrollmentCenter(enrollment_id, teacherId);
-      if (centerId === null) {
-        return res.status(404).json({
-          success: false,
-          message: "Enrollment not found or not assigned to you",
-        });
-      }
-
-      const medal = await medalService.printSingle({
-        enrollmentId: enrollment_id,
-        teacherId,
-        centerId,
-        ptcDate: ptc_date,
-      });
-
-      res.status(201).json({ success: true, data: medal });
-    } catch (err) {
-      if (err.status)
-        return res
-          .status(err.status)
-          .json({ success: false, message: err.message });
-      next(err);
-    }
-  },
-);
-
-router.post(
-  "/medals/print/batch",
-  printLimiter,
-  validate(printMedalBatchBody),
-  async (req, res, next) => {
-    try {
-      const { teacherId } = teacherContext(req);
-      const { items } = req.body;
-
-      const centerId = await resolveEnrollmentCenter(
-        items[0].enrollment_id,
-        teacherId,
-      );
-      if (centerId === null) {
-        return res.status(404).json({
-          success: false,
-          message: "Enrollment not found or not assigned to you",
-        });
-      }
-
-      const enrollmentIds = items.map((i) => i.enrollment_id);
-      const centerCheck = await query(
-        `SELECT COUNT(*)::int AS total FROM enrollments
-         WHERE id = ANY($1) AND center_id = $2 AND teacher_id = $3 AND is_active = TRUE`,
-        [enrollmentIds, centerId, teacherId],
-      );
-
-      if (centerCheck.rows[0].total !== items.length) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "All enrollments in a batch must belong to the same center. Split into multiple requests.",
-        });
-      }
-
-      const result = await medalService.printBatch({
-        items: items.map((i) => ({
-          enrollmentId: i.enrollment_id,
-          ptcDate: i.ptc_date,
-        })),
-        teacherId,
-        centerId,
-      });
-
-      res.status(201).json({ success: true, data: result });
-    } catch (err) {
-      if (err.status)
-        return res
-          .status(err.status)
-          .json({ success: false, message: err.message });
-      next(err);
-    }
-  },
-);
-
-router.get("/medals", async (req, res, next) => {
-  try {
-    const { teacherId } = teacherContext(req);
-    const { page, limit, offset } = parsePagination(req.query);
-
-    const { rows, total } = await medalService.getByTeacher({
-      teacherId,
-      centerId: null,
-      limit,
-      offset,
-    });
-
-    res
-      .status(200)
-      .json({ success: true, ...paginateResponse(rows, total, page, limit) });
-  } catch (err) {
-    next(err);
-  }
-});
 
 router.get("/reports", async (req, res, next) => {
   try {
@@ -809,9 +695,7 @@ router.patch(
   },
 );
 
-// [FIX] GET /stock — return object langsung untuk single center,
-// array untuk multi-center. Test expect res.body.data.cert_quantity (object),
-// bukan res.body.data[0].cert_quantity (array).
+// GET /stock — return object untuk single center, array untuk multi-center
 router.get("/stock", async (req, res, next) => {
   try {
     const { teacherId } = teacherContext(req);
@@ -843,7 +727,6 @@ router.get("/stock", async (req, res, next) => {
       });
     }
 
-    // Single center → object langsung; multi-center → array
     const data = result.rows.length === 1 ? result.rows[0] : result.rows;
 
     res.status(200).json({ success: true, data });
@@ -856,7 +739,6 @@ router.get("/activity", async (req, res, next) => {
   try {
     const { teacherId } = teacherContext(req);
 
-    // Ambil semua center_id yang di-assign ke teacher ini
     const centersResult = await query(
       `SELECT center_id FROM teacher_centers WHERE teacher_id = $1`,
       [teacherId],
