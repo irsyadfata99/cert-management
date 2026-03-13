@@ -1031,11 +1031,8 @@ router.get(
           val: req.query.module_id ? parseInt(req.query.module_id) : undefined,
         },
         {
-          col: "e.is_active",
-          val:
-            req.query.is_active === undefined
-              ? true
-              : req.query.is_active === "true",
+          col: "es.enrollment_status",
+          val: req.query.enrollment_status,
         },
       ]);
 
@@ -1049,19 +1046,24 @@ router.get(
       const [dataResult, countResult] = await Promise.all([
         query(
           `SELECT e.id, s.name AS student_name, m.name AS module_name,
-                u.name AS teacher_name, c.name AS center_name,
-                e.is_active, e.enrolled_at, e.updated_at
-         FROM enrollments e
-         JOIN students s ON s.id = e.student_id
-         JOIN modules m  ON m.id = e.module_id
-         JOIN users u    ON u.id = e.teacher_id
-         JOIN centers c  ON c.id = e.center_id
-         ${whereClause} ${orderBy}
-         LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+                  u.name AS teacher_name, c.name AS center_name,
+                  e.is_active, e.enrolled_at, e.updated_at,
+                  es.enrollment_status
+           FROM enrollments e
+           JOIN students s ON s.id = e.student_id
+           JOIN modules m  ON m.id = e.module_id
+           JOIN users u    ON u.id = e.teacher_id
+           JOIN centers c  ON c.id = e.center_id
+           LEFT JOIN vw_enrollment_status es ON es.enrollment_id = e.id
+           ${whereClause} ${orderBy}
+           LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
           [...values, limit, offset],
         ),
         query(
-          `SELECT COUNT(*)::int AS total FROM enrollments e ${whereClause}`,
+          `SELECT COUNT(*)::int AS total
+           FROM enrollments e
+           LEFT JOIN vw_enrollment_status es ON es.enrollment_id = e.id
+           ${whereClause}`,
           values,
         ),
       ]);
@@ -1218,7 +1220,7 @@ router.get(
          cert.scan_uploaded_at,
          r.id                                        AS report_id,
          r.drive_file_id,
-         r.drive_uploaded_at,
+         r.drive_uploaded_at  AS report_uploaded_at,
          (cert.scan_file_id IS NOT NULL)             AS scan_complete,
          (r.drive_file_id   IS NOT NULL)             AS report_complete,
          (cert.scan_file_id IS NOT NULL AND
@@ -1234,7 +1236,6 @@ router.get(
        ) cert ON TRUE
        LEFT JOIN reports r ON r.enrollment_id = e.id
        WHERE e.id = $1
-         AND e.is_active = TRUE
          ${centerId ? "AND e.center_id = $2" : ""}`,
         centerId ? [req.params.id, centerId] : [req.params.id],
       );

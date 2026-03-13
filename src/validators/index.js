@@ -88,7 +88,6 @@ const createStudentBody = z.object({
   center_id: z.number().int().positive().optional(),
 });
 
-// [CHANGED] Tambah center_id optional untuk pindah center
 const updateStudentBody = z
   .object({
     name: z.string().min(1, "Student name is required").max(255).optional(),
@@ -158,10 +157,20 @@ const createEnrollmentBody = z.object({
     .positive(),
 });
 
+// [CHANGED] Tambah enrollment_status filter, hapus is_active filter
 const listEnrollmentsQuery = paginationQuery.extend({
   center_id: z.string().regex(/^\d+$/).optional(),
   teacher_id: z.string().regex(/^\d+$/).optional(),
   module_id: z.string().regex(/^\d+$/).optional(),
+  enrollment_status: z
+    .enum([
+      "pending",
+      "cert_printed",
+      "scan_uploaded",
+      "report_uploaded",
+      "complete",
+    ])
+    .optional(),
 });
 
 const printCertBody = z.object({

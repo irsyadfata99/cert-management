@@ -232,8 +232,6 @@ router.get(
     try {
       const { page, limit, offset } = parsePagination(req.query);
 
-      // [CHANGED] center_id filter tetap optional untuk query param,
-      // tapi admin tidak lagi terikat center secara default
       const { whereClause, values } = buildWhere([
         { col: "u.role", val: "admin" },
         {
@@ -264,7 +262,6 @@ router.get(
 
       const [dataResult, countResult] = await Promise.all([
         query(
-          // [CHANGED] Hapus center_id, center_name, LEFT JOIN centers
           `SELECT u.id, u.email, u.name, u.avatar,
                   u.is_active, u.created_at, u.updated_at
            FROM users u
@@ -295,7 +292,6 @@ router.get(
 
 router.post("/admins", validate(createAdminBody), async (req, res, next) => {
   try {
-    // [CHANGED] Tidak perlu center_id, tidak perlu cek center
     const { email, name } = req.body;
 
     const result = await query(
@@ -433,8 +429,6 @@ router.patch(
 // MONITORING
 // ============================================================
 
-// [NEW] Overview semua center: stock, teacher count, student count
-// Dipanggil oleh test: GET /api/super-admin/monitoring/centers
 router.get("/monitoring/centers", async (req, res, next) => {
   try {
     const result = await query(
@@ -468,8 +462,6 @@ router.get("/monitoring/centers", async (req, res, next) => {
   }
 });
 
-// [FIX] Rename dari /monitoring/uploads → /monitoring/upload-status
-// Sesuai yang dipanggil test dan lebih deskriptif untuk frontend
 router.get(
   "/monitoring/upload-status",
   validate(monitoringUploadQuery, "query"),
@@ -557,8 +549,6 @@ router.get(
   },
 );
 
-// [FIX] Rename dari /monitoring/stock → /monitoring/stock-alerts
-// Sesuai yang dipanggil test. Hanya return center yang has_alert = TRUE.
 router.get("/monitoring/stock-alerts", async (req, res, next) => {
   try {
     const result = await query(
@@ -638,21 +628,49 @@ router.get(
       );
 
       const rows = result.rows;
+
       const COLUMNS = [
-        { key: "enrollment_id", label: "enrollment_id" },
-        { key: "student_name", label: "student_name" },
-        { key: "module_name", label: "module" },
-        { key: "teacher_name", label: "teacher" },
-        { key: "center_name", label: "center" },
-        { key: "enrollment_status", label: "status" },
-        { key: "cert_printed_count", label: "cert_printed" },
-        { key: "cert_reprint_count", label: "cert_reprint" },
-        { key: "cert_scan_uploaded", label: "scan_uploaded" },
-        { key: "medal_printed_count", label: "medal_printed" },
-        { key: "has_report", label: "has_report" },
-        { key: "report_uploaded", label: "report_uploaded" },
-        { key: "enrolled_at", label: "enrolled_at" },
+        { key: "enrollment_id", label: "ID" },
+        { key: "student_name", label: "Student Name" },
+        { key: "module_name", label: "Module" },
+        { key: "teacher_name", label: "Teacher" },
+        { key: "center_name", label: "Center" },
+        { key: "enrollment_status", label: "Status" },
+        { key: "cert_printed_count", label: "Cert Printed" },
+        { key: "cert_reprint_count", label: "Cert Reprint" },
+        { key: "cert_scan_uploaded", label: "Scan Uploaded" },
+        { key: "medal_printed_count", label: "Medal Printed" },
+        { key: "has_report", label: "Has Report" },
+        { key: "report_uploaded", label: "Report Uploaded" },
+        { key: "enrolled_at", label: "Enrolled At" },
       ];
+
+      // Map raw status value → human-readable label
+      const STATUS_LABELS = {
+        pending: "Pending",
+        cert_printed: "Cert Printed",
+        scan_uploaded: "Scan Uploaded",
+        report_uploaded: "Report Uploaded",
+        complete: "Complete",
+      };
+
+      // Format date → "13 Mar 2026 13:58" in WIB (UTC+7)
+      const formatDate = (val) => {
+        if (!val) return "";
+        const d = val instanceof Date ? val : new Date(val);
+        if (isNaN(d)) return String(val);
+        return d
+          .toLocaleString("en-GB", {
+            timeZone: "Asia/Jakarta",
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          })
+          .replace(",", ""); // "13 Mar 2026 13:58"
+      };
 
       const escape = (val) => {
         if (val === null || val === undefined) return "";
@@ -667,9 +685,16 @@ router.get(
       const csvRows = rows.map((row) =>
         COLUMNS.map((col) => {
           let val = row[col.key];
-          if (typeof val === "boolean") val = val ? "Yes" : "No";
-          if (val instanceof Date)
-            val = val.toISOString().replace("T", " ").split(".")[0];
+          if (col.key === "enrollment_status") {
+            val = STATUS_LABELS[val] ?? val;
+          } else if (typeof val === "boolean") {
+            val = val ? "Yes" : "No";
+          } else if (
+            val instanceof Date ||
+            (typeof val === "string" && col.key === "enrolled_at")
+          ) {
+            val = formatDate(val);
+          }
           return escape(val);
         }).join(","),
       );
@@ -704,7 +729,6 @@ router.patch(
   validate(idParam, "params"),
   async (req, res, next) => {
     try {
-      // Cek center exists
       const centerResult = await query(
         `SELECT id, name, drive_folder_id FROM centers WHERE id = $1 AND is_active = TRUE`,
         [req.params.id],
@@ -726,7 +750,6 @@ router.patch(
         });
       }
 
-      // Buat folder Drive untuk center
       const driveFolderId = await driveService.createCenterFolder(center.name);
 
       if (!driveFolderId) {

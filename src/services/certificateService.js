@@ -3,8 +3,13 @@ const logger = require("../config/logger");
 const BATCH_MAX_SIZE = 100;
 
 const normalizeDbError = (err) => {
-  if (err.message?.includes("Stock sertifikat tidak mencukupi")) {
+  if (err.message?.includes("Insufficient certificate stock")) {
     const normalized = new Error("Insufficient certificate stock");
+    normalized.status = 400;
+    return normalized;
+  }
+  if (err.message?.includes("Insufficient medal stock")) {
+    const normalized = new Error("Insufficient medal stock");
     normalized.status = 400;
     return normalized;
   }
@@ -50,6 +55,7 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
       await client.query(`SELECT fn_decrement_certificate_stock($1, 1)`, [
         centerId,
       ]);
+      await client.query(`SELECT fn_decrement_medal_stock($1, 1)`, [centerId]);
     } catch (err) {
       throw normalizeDbError(err);
     }
@@ -129,6 +135,10 @@ const printBatch = async ({ items, teacherId, centerId }) => {
         centerId,
         items.length,
       ]);
+      await client.query(`SELECT fn_decrement_medal_stock($1, $2)`, [
+        centerId,
+        items.length,
+      ]);
     } catch (err) {
       throw normalizeDbError(err);
     }
@@ -199,6 +209,7 @@ const reprint = async ({ originalCertId, teacherId, centerId, ptcDate }) => {
 
     const { enrollment_id: enrollmentId } = original.rows[0];
 
+    // Reprint: hanya kurangi certificate stock, medal tidak berkurang
     try {
       await client.query(`SELECT fn_decrement_certificate_stock($1, 1)`, [
         centerId,
@@ -227,8 +238,6 @@ const reprint = async ({ originalCertId, teacherId, centerId, ptcDate }) => {
   });
 };
 
-// [FIX] centerId bersifat opsional — teacher bisa lihat semua cert miliknya
-// lintas center. Kalau centerId null/undefined, tidak difilter per center.
 const getByTeacher = async ({
   teacherId,
   centerId,
@@ -240,7 +249,6 @@ const getByTeacher = async ({
   const values = [teacherId];
   let idx = 2;
 
-  // [FIX] Hanya tambah filter center_id kalau centerId benar-benar diberikan
   if (centerId !== null && centerId !== undefined) {
     conditions.push(`c.center_id = $${idx++}`);
     values.push(centerId);
