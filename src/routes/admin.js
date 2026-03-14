@@ -214,7 +214,7 @@ router.patch(
 
       const result = await query(
         `UPDATE students
-       ${setClause}, updated_at = NOW()
+       ${setClause}
        WHERE id = $${nextIndex} AND is_active = TRUE
        RETURNING id, name, center_id, is_active, updated_at`,
         [...values, studentId],

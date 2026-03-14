@@ -462,11 +462,18 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
         [fileId, uploadedName, report.id],
       );
 
-      logger.info("Report PDF auto-uploaded to Drive", {
+      // [FIX] Auto-deactivate enrollment setelah report berhasil diupload ke Drive
+      await query(
+        `UPDATE enrollments SET is_active = FALSE, updated_at = NOW() WHERE id = $1`,
+        [enrollment_id],
+      );
+
+      logger.info("Report PDF auto-uploaded to Drive, enrollment deactivated", {
         reportId: report.id,
         studentName,
         fileId,
         teacherId,
+        enrollmentId: enrollment_id,
       });
 
       return res.status(201).json({
@@ -519,6 +526,7 @@ router.patch(
 
       const existing = await query(
         `SELECT r.id, r.drive_file_id, r.content, r.academic_year, r.period,
+                r.enrollment_id,
                 r.score_creativity, r.score_critical_thinking, r.score_attention,
                 r.score_responsibility, r.score_coding_skills,
                 s.name AS student_name
@@ -658,11 +666,21 @@ router.patch(
           [fileId, uploadedName, req.params.id],
         );
 
-        logger.info("Report PDF re-uploaded after patch", {
-          reportId: req.params.id,
-          fileId,
-          teacherId,
-        });
+        // [FIX] Auto-deactivate enrollment setelah report patch berhasil diupload ke Drive
+        await query(
+          `UPDATE enrollments SET is_active = FALSE, updated_at = NOW() WHERE id = $1`,
+          [existingData.enrollment_id],
+        );
+
+        logger.info(
+          "Report PDF re-uploaded after patch, enrollment deactivated",
+          {
+            reportId: req.params.id,
+            fileId,
+            teacherId,
+            enrollmentId: existingData.enrollment_id,
+          },
+        );
 
         return res.status(200).json({
           success: true,

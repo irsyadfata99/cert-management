@@ -212,7 +212,6 @@ router.post(
       const certId = parseInt(req.params.id);
       const teacherId = req.user.id;
 
-      // ✅ FIX: Extend query to include student_name and module_name for filename
       const certCheck = await query(
         `SELECT c.id, c.scan_file_id, c.enrollment_id,
                 s.name AS student_name,
@@ -255,7 +254,6 @@ router.post(
         }
       }
 
-      // ✅ FIX: Format filename → YYYY-MM-DD_Student-Name_Module-Name.ext
       const today = new Date().toISOString().split("T")[0];
       const safeName = cert.student_name
         .replace(/[^a-zA-Z0-9]/g, "-")
@@ -321,7 +319,7 @@ router.post(
       const driveFolderId = req.user.drive_folder_id;
 
       const reportCheck = await query(
-        `SELECT r.id, r.drive_file_id, s.name AS student_name
+        `SELECT r.id, r.drive_file_id, r.enrollment_id, s.name AS student_name
          FROM reports r
          JOIN enrollments e ON e.id = r.enrollment_id
          JOIN students s    ON s.id = e.student_id
@@ -370,10 +368,17 @@ router.post(
         [fileId, uploadedName, reportId],
       );
 
-      logger.info("Report manually uploaded to Drive", {
+      // [FIX] Auto-deactivate enrollment setelah manual upload report ke Drive
+      await query(
+        `UPDATE enrollments SET is_active = FALSE, updated_at = NOW() WHERE id = $1`,
+        [report.enrollment_id],
+      );
+
+      logger.info("Report manually uploaded to Drive, enrollment deactivated", {
         reportId,
         fileId,
         teacherId,
+        enrollmentId: report.enrollment_id,
       });
 
       res.status(200).json({
