@@ -1016,7 +1016,6 @@ router.get(
       const centerId = resolveCenterId(req, req.query.center_id);
       const { page, limit, offset } = parsePagination(req.query);
 
-      // [FIX #4] tambah search filter untuk student name
       const { whereClause, values } = buildWhere([
         { col: "e.center_id", val: centerId },
         {
@@ -1065,6 +1064,7 @@ router.get(
            LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
           [...values, limit, offset],
         ),
+        // [FIX #1] tambah JOIN students s agar s.name ILIKE tidak crash di count query
         query(
           `SELECT COUNT(*)::int AS total
            FROM enrollments e
@@ -1374,10 +1374,6 @@ router.get("/monitoring/stock-alerts", async (req, res, next) => {
   }
 });
 
-// ── [NEW] GET /admin/monitoring/reprints ─────────────────────
-// Auto-filter ke center_id admin yang sedang login.
-// Super admin tidak kena filter ini karena route ini hanya
-// accessible oleh role "admin" (super_admin pakai /super-admin/...).
 router.get(
   "/monitoring/reprints",
   validate(monitoringReprintsQuery, "query"),
@@ -1385,7 +1381,6 @@ router.get(
     try {
       const { page, limit, offset } = parsePagination(req.query);
 
-      // Admin selalu difilter ke center miliknya sendiri
       const centerId = req.user.center_id ?? null;
 
       const filters = [
