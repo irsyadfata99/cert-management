@@ -1016,6 +1016,7 @@ router.get(
       const centerId = resolveCenterId(req, req.query.center_id);
       const { page, limit, offset } = parsePagination(req.query);
 
+      // [FIX #4] tambah search filter untuk student name
       const { whereClause, values } = buildWhere([
         { col: "e.center_id", val: centerId },
         {
@@ -1031,6 +1032,13 @@ router.get(
         {
           col: "es.enrollment_status",
           val: req.query.enrollment_status,
+        },
+        // [FIX #4] search by student name
+        {
+          col: "s.name",
+          val: req.query.search,
+          op: "ILIKE",
+          transform: (v) => `%${v}%`,
         },
       ]);
 
@@ -1060,6 +1068,7 @@ router.get(
         query(
           `SELECT COUNT(*)::int AS total
            FROM enrollments e
+           JOIN students s ON s.id = e.student_id
            LEFT JOIN vw_enrollment_status es ON es.enrollment_id = e.id
            ${whereClause}`,
           values,

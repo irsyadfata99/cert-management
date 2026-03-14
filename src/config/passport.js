@@ -70,13 +70,22 @@ passport.use(
           let driveFolderId = user.drive_folder_id;
 
           if (user.role === "teacher" && !driveFolderId) {
+            // [FIX #12] Ambil semua center teacher (bukan hanya primary)
+            // dan buat Drive folder untuk primary center
             try {
-              const centerResult = await query(
-                `SELECT drive_folder_id FROM centers WHERE id = $1 AND is_active = TRUE`,
-                [user.center_id],
+              const centersResult = await query(
+                `SELECT tc.center_id, tc.is_primary, c.drive_folder_id AS center_drive_folder_id
+                 FROM teacher_centers tc
+                 JOIN centers c ON c.id = tc.center_id
+                 WHERE tc.teacher_id = $1
+                   AND c.is_active = TRUE
+                 ORDER BY tc.is_primary DESC`,
+                [user.id],
               );
 
-              const centerFolderId = centerResult.rows[0]?.drive_folder_id;
+              // Gunakan primary center (atau center pertama jika tidak ada primary)
+              const primaryCenter = centersResult.rows[0];
+              const centerFolderId = primaryCenter?.center_drive_folder_id;
 
               if (!centerFolderId) {
                 logger.warn("Teacher center has no Drive folder yet", {
@@ -91,6 +100,7 @@ passport.use(
                 logger.info("Drive folder created for teacher", {
                   userId: user.id,
                   folderId: driveFolderId,
+                  basedOnCenter: primaryCenter.center_id,
                 });
               }
             } catch (driveErr) {
@@ -135,6 +145,7 @@ passport.use(
 
           return done(null, activatedUser);
         }
+
         const newAvatar = profile.photos?.[0]?.value ?? null;
         if (newAvatar !== user.avatar || !user.google_id) {
           await query(

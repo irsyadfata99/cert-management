@@ -176,6 +176,8 @@ const listEnrollmentsQuery = paginationQuery.extend({
   center_id: z.string().regex(/^\d+$/).optional(),
   teacher_id: z.string().regex(/^\d+$/).optional(),
   module_id: z.string().regex(/^\d+$/).optional(),
+  // [FIX #4] tambah search
+  search: z.string().max(100).optional(),
   enrollment_status: z
     .enum([
       "pending",

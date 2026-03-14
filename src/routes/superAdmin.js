@@ -262,7 +262,7 @@ router.get(
       const [dataResult, countResult] = await Promise.all([
         query(
           `SELECT u.id, u.email, u.name, u.avatar,
-                  u.is_active, u.created_at, u.updated_at
+                  u.center_id, u.is_active, u.created_at, u.updated_at
            FROM users u
            ${whereClause} ${orderBy}
            LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,

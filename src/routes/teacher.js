@@ -250,10 +250,10 @@ router.get(
           ? undefined
           : req.query.is_reprint === "true";
 
+      // [FIX #10] hapus `page` dari parameter — tidak dipakai di getByTeacher
       const { rows, total } = await certificateService.getByTeacher({
         teacherId,
         centerId: null,
-        page,
         limit,
         offset,
         isReprint,
@@ -462,7 +462,6 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
         [fileId, uploadedName, report.id],
       );
 
-      // [FIX] Auto-deactivate enrollment setelah report berhasil diupload ke Drive
       await query(
         `UPDATE enrollments SET is_active = FALSE, updated_at = NOW() WHERE id = $1`,
         [enrollment_id],
@@ -666,7 +665,6 @@ router.patch(
           [fileId, uploadedName, req.params.id],
         );
 
-        // [FIX] Auto-deactivate enrollment setelah report patch berhasil diupload ke Drive
         await query(
           `UPDATE enrollments SET is_active = FALSE, updated_at = NOW() WHERE id = $1`,
           [existingData.enrollment_id],
@@ -713,7 +711,6 @@ router.patch(
   },
 );
 
-// GET /stock — return object untuk single center, array untuk multi-center
 router.get("/stock", async (req, res, next) => {
   try {
     const { teacherId } = teacherContext(req);
