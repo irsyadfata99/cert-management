@@ -1,10 +1,13 @@
 -- ============================================================
 -- SCHEMA: Certificate & Medal Management System
--- Version: 3.1
+-- Version: 3.2
 -- Changelog:
 --   v3.0 - Tambah teacher_centers untuk multi-center support
 --   v3.1 - Fix vw_enrollment_status & vw_teacher_upload_status
 --          status values agar konsisten dengan frontend
+--   v3.2 - Fix vw_enrollment_status & vw_teacher_upload_status
+--          hapus filter is_active = TRUE pada enrollments
+--          agar enrollment yang sudah complete tetap muncul
 -- ============================================================
 
 -- EXTENSIONS
@@ -447,12 +450,9 @@ CREATE TRIGGER trg_reports_link_to_prints
 -- VIEWS
 -- ============================================================
 
--- [CHANGED v3.1] Status values disesuaikan dengan frontend formatEnrollmentStatus:
---   pending        → belum ada cert sama sekali
---   cert_printed   → cert sudah dicetak
---   scan_uploaded  → scan cert sudah diupload
---   report_uploaded→ report sudah diupload ke Drive (complete flow)
---   complete       → alias sama dengan report_uploaded (drive_file_id NOT NULL)
+-- [v3.2] Hapus WHERE e.is_active = TRUE agar enrollment yang
+--        sudah complete (is_active = FALSE) tetap tampil dengan
+--        status yang benar di admin enrollment page.
 CREATE OR REPLACE VIEW vw_enrollment_status AS
 SELECT
   e.id                                                             AS enrollment_id,
@@ -485,16 +485,12 @@ JOIN centers  c ON c.id = e.center_id
 LEFT JOIN certificates cert ON cert.enrollment_id = e.id
 LEFT JOIN medals       med  ON med.enrollment_id  = e.id
 LEFT JOIN reports      r    ON r.enrollment_id    = e.id
-WHERE e.is_active = TRUE
 GROUP BY e.id, s.name, m.name, u.name, c.name,
          r.id, r.drive_file_id, r.drive_uploaded_at;
 
--- [CHANGED v3.1] Status values disesuaikan dengan monitoringUploadQuery validator:
---   not_started    → belum ada cert
---   printed        → cert dicetak, belum ada scan
---   scan_uploaded  → scan sudah ada
---   report_drafted → report dibuat tapi belum upload ke Drive
---   complete       → report sudah di Drive
+-- [v3.2] Hapus AND e.is_active = TRUE agar enrollment complete
+--        tetap muncul di monitoring upload status.
+--        Filter u.is_active = TRUE dipertahankan.
 CREATE OR REPLACE VIEW vw_teacher_upload_status AS
 SELECT
   u.id                  AS teacher_id,
@@ -530,8 +526,7 @@ LEFT JOIN LATERAL (
   LIMIT 1
 ) cert ON TRUE
 LEFT JOIN reports r ON r.enrollment_id = e.id
-WHERE e.is_active = TRUE
-  AND u.is_active = TRUE;
+WHERE u.is_active = TRUE;
 
 CREATE OR REPLACE VIEW vw_monthly_center_activity AS
 WITH cert_monthly AS (
