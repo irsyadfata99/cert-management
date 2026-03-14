@@ -12,13 +12,29 @@ const FONT_REGULAR_PATH = path.join(
 );
 const FONT_BOLD_PATH = path.join(__dirname, "../assets/fonts/calibri-bold.ttf");
 
+// Validate required assets exist at module load time so the error is
+// caught early (during startup) rather than silently at report generation.
+const REQUIRED_ASSETS = [
+  { path: TEMPLATE_PATH, label: "PDF template" },
+  { path: FONT_REGULAR_PATH, label: "Calibri Regular font" },
+  { path: FONT_BOLD_PATH, label: "Calibri Bold font" },
+];
+
+for (const asset of REQUIRED_ASSETS) {
+  if (!fs.existsSync(asset.path)) {
+    // Log as error and throw so the process fails fast with a clear message.
+    const msg = `Required asset not found: ${asset.label} at ${asset.path}`;
+    logger.error(msg);
+    throw new Error(msg);
+  }
+}
+
+// Template bytes are cached after first load. Restart the server to pick
+// up a new template file (intentional — templates should not change at runtime).
 let _cachedTemplateBytes = null;
 
 const getTemplateBytes = () => {
   if (_cachedTemplateBytes) return _cachedTemplateBytes;
-  if (!fs.existsSync(TEMPLATE_PATH)) {
-    throw new Error(`PDF template not found at: ${TEMPLATE_PATH}`);
-  }
   _cachedTemplateBytes = fs.readFileSync(TEMPLATE_PATH);
   return _cachedTemplateBytes;
 };

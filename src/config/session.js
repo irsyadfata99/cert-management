@@ -18,7 +18,7 @@ const sessionConfig = session({
   store: new pgSession({
     pool,
     tableName: "session",
-    createTableIfMissing: false,
+    createTableIfMissing: true,
     pruneSessionInterval: 60 * 60,
   }),
 

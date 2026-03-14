@@ -55,6 +55,7 @@ const listAdminsQuery = paginationQuery.extend({
 
 const monitoringUploadQuery = paginationQuery.extend({
   center_id: z.string().regex(/^\d+$/).optional(),
+  // Values must match vw_teacher_upload_status.upload_status column
   status: z
     .enum([
       "not_started",
@@ -70,7 +71,6 @@ const monitoringActivityQuery = z.object({
   center_id: z.string().regex(/^\d+$/).optional(),
 });
 
-// ── [NEW] Reprint monitoring query validator ──────────────────
 const monitoringReprintsQuery = z.object({
   page: z.string().regex(/^\d+$/).optional(),
   limit: z.string().regex(/^\d+$/).optional(),
@@ -176,8 +176,11 @@ const listEnrollmentsQuery = paginationQuery.extend({
   center_id: z.string().regex(/^\d+$/).optional(),
   teacher_id: z.string().regex(/^\d+$/).optional(),
   module_id: z.string().regex(/^\d+$/).optional(),
-  // [FIX #4] tambah search
   search: z.string().max(100).optional(),
+  // Values must match the CASE expression in vw_enrollment_status:
+  //   'pending' | 'cert_printed' | 'scan_uploaded' | 'report_uploaded' | 'complete'
+  // NOTE: 'report_drafted' is a vw_teacher_upload_status value, NOT vw_enrollment_status.
+  // The correct value here is 'report_uploaded' (drive_file_id IS NOT NULL check in view).
   enrollment_status: z
     .enum([
       "pending",

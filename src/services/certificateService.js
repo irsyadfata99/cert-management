@@ -57,7 +57,6 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
       throw err;
     }
 
-    // Decrement both certificate and medal stock
     try {
       await client.query(`SELECT fn_decrement_certificate_stock($1, 1)`, [
         centerId,
@@ -67,7 +66,6 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
       throw normalizeDbError(err);
     }
 
-    // Insert certificate
     const certResult = await client.query(
       `INSERT INTO certificates (enrollment_id, teacher_id, center_id, ptc_date, is_reprint)
        VALUES ($1, $2, $3, $4, FALSE)
@@ -77,7 +75,6 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
 
     const cert = certResult.rows[0];
 
-    // Insert medal (bundled with certificate print)
     const medalResult = await client.query(
       `INSERT INTO medals (enrollment_id, teacher_id, center_id, ptc_date)
        VALUES ($1, $2, $3, $4)
@@ -119,12 +116,16 @@ const printBatch = async ({ items, teacherId, centerId }) => {
   return withTransaction(async (client) => {
     const enrollmentIds = items.map((i) => i.enrollmentId);
 
+    // Lock the enrollment rows for the duration of this transaction so
+    // concurrent batch requests for the same enrollments are serialised
+    // rather than both passing the duplicate check simultaneously.
     const enrollmentCheck = await client.query(
       `SELECT id FROM enrollments
        WHERE id = ANY($1)
          AND teacher_id = $2
          AND center_id = $3
-         AND is_active = TRUE`,
+         AND is_active = TRUE
+       FOR UPDATE`,
       [enrollmentIds, teacherId, centerId],
     );
 
@@ -151,21 +152,12 @@ const printBatch = async ({ items, teacherId, centerId }) => {
       throw err;
     }
 
-    const alreadyPrintedMedal = await client.query(
-      `SELECT enrollment_id FROM medals WHERE enrollment_id = ANY($1)`,
-      [enrollmentIds],
-    );
+    // NOTE: we no longer do a separate alreadyPrintedMedal pre-check.
+    // The medals table has a unique index on enrollment_id (one medal per
+    // enrollment), so a concurrent insert will raise a 23505 unique violation
+    // which is caught below and surfaced as a 409.  This removes the TOCTOU
+    // race between the check and the insert.
 
-    if (alreadyPrintedMedal.rows.length > 0) {
-      const ids = alreadyPrintedMedal.rows.map((r) => r.enrollment_id);
-      const err = new Error(
-        `Medals already printed for enrollment IDs: ${ids.join(", ")}`,
-      );
-      err.status = 409;
-      throw err;
-    }
-
-    // Decrement both stocks
     try {
       await client.query(`SELECT fn_decrement_certificate_stock($1, $2)`, [
         centerId,
@@ -184,7 +176,6 @@ const printBatch = async ({ items, teacherId, centerId }) => {
     );
     const batchId = batchIdResult.rows[0].batch_id;
 
-    // Batch insert certificates
     const certPlaceholders = items
       .map(
         (_, i) =>
@@ -207,7 +198,6 @@ const printBatch = async ({ items, teacherId, centerId }) => {
       certValues,
     );
 
-    // Batch insert medals (bundled)
     const medalPlaceholders = items
       .map(
         (_, i) =>
@@ -223,12 +213,24 @@ const printBatch = async ({ items, teacherId, centerId }) => {
       batchId,
     ]);
 
-    const medalResult = await client.query(
-      `INSERT INTO medals (enrollment_id, teacher_id, center_id, ptc_date, batch_id)
-       VALUES ${medalPlaceholders}
-       RETURNING id, medal_unique_id, enrollment_id`,
-      medalValues,
-    );
+    let medalResult;
+    try {
+      medalResult = await client.query(
+        `INSERT INTO medals (enrollment_id, teacher_id, center_id, ptc_date, batch_id)
+         VALUES ${medalPlaceholders}
+         RETURNING id, medal_unique_id, enrollment_id`,
+        medalValues,
+      );
+    } catch (err) {
+      if (err.code === "23505") {
+        const conflict = new Error(
+          "One or more medals already exist for the requested enrollments.",
+        );
+        conflict.status = 409;
+        throw conflict;
+      }
+      throw err;
+    }
 
     const certs = certResult.rows;
     const medals = medalResult.rows;
@@ -271,7 +273,6 @@ const reprint = async ({ originalCertId, teacherId, centerId, ptcDate }) => {
 
     const { enrollment_id: enrollmentId } = original.rows[0];
 
-    // Reprint: only decrement certificate stock, medal stock unchanged
     try {
       await client.query(`SELECT fn_decrement_certificate_stock($1, 1)`, [
         centerId,

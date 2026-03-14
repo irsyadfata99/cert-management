@@ -3,7 +3,16 @@ const app = require("./src/app");
 const logger = require("./src/config/logger");
 const { pool } = require("./src/config/database");
 
-const PORT = process.env.PORT || 3000;
+const rawPort = process.env.PORT || "3000";
+const PORT = parseInt(rawPort, 10);
+
+if (isNaN(PORT) || PORT < 1 || PORT > 65535) {
+  logger.error(
+    `Invalid PORT value: "${rawPort}". Must be a number between 1 and 65535.`,
+  );
+  process.exit(1);
+}
+
 const NODE_ENV = process.env.NODE_ENV || "development";
 
 const REQUIRED_ENV = [

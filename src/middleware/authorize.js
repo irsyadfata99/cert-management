@@ -1,7 +1,6 @@
 const { query } = require("../config/database");
 const logger = require("../config/logger");
-
-const SESSION_CACHE_REVALIDATE_INTERVAL_MS = 30 * 1000;
+const { SESSION_CACHE_REVALIDATE_INTERVAL_MS } = require("../config/constants");
 
 const authorize = (...roles) => {
   return async (req, res, next) => {
@@ -81,17 +80,6 @@ const authorize = (...roles) => {
           .status(401)
           .json({ success: false, message: "Account deactivated" });
       }
-
-      // ── DEBUG LOG ──────────────────────────────────────────
-      logger.warn("authorize called", {
-        path: req.originalUrl,
-        method: req.method,
-        userId: user?.id,
-        userRole: user?.role,
-        requiredRoles: roles,
-        source: roles.length === 0 ? "isAuthenticated" : "authorize",
-      });
-      // ──────────────────────────────────────────────────────
 
       if (roles.length > 0 && !roles.includes(user.role)) {
         logger.warn("403 Forbidden", {

@@ -2,6 +2,10 @@ const { query, withTransaction } = require("../config/database");
 const logger = require("../config/logger");
 const BATCH_MAX_SIZE = 100;
 
+// NOTE: medalService.printSingle has been removed.
+// Medals are always printed bundled with certificates via certificateService.
+// If a standalone medal reprint is ever needed in the future, add it here.
+
 const normalizeDbError = (err) => {
   if (err.message?.includes("Stock medali tidak mencukupi")) {
     const normalized = new Error("Insufficient medal stock");
@@ -11,67 +15,6 @@ const normalizeDbError = (err) => {
   return err;
 };
 
-const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
-  return withTransaction(async (client) => {
-    const enrollment = await client.query(
-      `SELECT e.id FROM enrollments e
-       WHERE e.id = $1
-         AND e.teacher_id = $2
-         AND e.center_id = $3
-         AND e.is_active = TRUE
-         AND EXISTS (
-           SELECT 1 FROM teacher_centers tc
-           WHERE tc.teacher_id = $2 AND tc.center_id = $3
-         )`,
-      [enrollmentId, teacherId, centerId],
-    );
-
-    if (enrollment.rows.length === 0) {
-      const err = new Error("Enrollment not found or not assigned to you");
-      err.status = 404;
-      throw err;
-    }
-
-    const existing = await client.query(
-      `SELECT id FROM medals WHERE enrollment_id = $1`,
-      [enrollmentId],
-    );
-
-    if (existing.rows.length > 0) {
-      const err = new Error("Medal already printed for this enrollment");
-      err.status = 409;
-      throw err;
-    }
-
-    try {
-      await client.query(`SELECT fn_decrement_medal_stock($1, 1)`, [centerId]);
-    } catch (err) {
-      throw normalizeDbError(err);
-    }
-
-    const result = await client.query(
-      `INSERT INTO medals (enrollment_id, teacher_id, center_id, ptc_date)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, medal_unique_id, enrollment_id, teacher_id, center_id, ptc_date, printed_at`,
-      [enrollmentId, teacherId, centerId, ptcDate],
-    );
-
-    const medal = result.rows[0];
-    logger.info("Medal printed", {
-      medalId: medal.id,
-      medalUniqueId: medal.medal_unique_id,
-      enrollmentId,
-      teacherId,
-      centerId,
-    });
-
-    return medal;
-  });
-};
-
-// [FIX] Hapus teacherAccess query — redundan karena enrollmentCheck sudah
-// filter AND teacher_id = $2 AND center_id = $3. Query ekstra ini
-// menyebabkan unit test mock sequence kacau (mock tidak menyiapkan query ini).
 const printBatch = async ({ items, teacherId, centerId }) => {
   if (!items?.length) {
     const err = new Error("No items provided for batch print");
@@ -90,12 +33,14 @@ const printBatch = async ({ items, teacherId, centerId }) => {
   return withTransaction(async (client) => {
     const enrollmentIds = items.map((i) => i.enrollmentId);
 
+    // Lock rows to serialise concurrent requests for the same enrollments.
     const enrollmentCheck = await client.query(
       `SELECT id FROM enrollments
        WHERE id = ANY($1)
          AND teacher_id = $2
          AND center_id = $3
-         AND is_active = TRUE`,
+         AND is_active = TRUE
+       FOR UPDATE`,
       [enrollmentIds, teacherId, centerId],
     );
 
@@ -107,20 +52,8 @@ const printBatch = async ({ items, teacherId, centerId }) => {
       throw err;
     }
 
-    const alreadyPrinted = await client.query(
-      `SELECT enrollment_id FROM medals WHERE enrollment_id = ANY($1)`,
-      [enrollmentIds],
-    );
-
-    if (alreadyPrinted.rows.length > 0) {
-      const ids = alreadyPrinted.rows.map((r) => r.enrollment_id);
-      const err = new Error(
-        `Medals already printed for enrollment IDs: ${ids.join(", ")}`,
-      );
-      err.status = 409;
-      throw err;
-    }
-
+    // Rely on the DB unique constraint on medals(enrollment_id) instead of a
+    // separate pre-check, eliminating the TOCTOU race condition.
     try {
       await client.query(`SELECT fn_decrement_medal_stock($1, $2)`, [
         centerId,
@@ -150,12 +83,24 @@ const printBatch = async ({ items, teacherId, centerId }) => {
       batchId,
     ]);
 
-    const result = await client.query(
-      `INSERT INTO medals (enrollment_id, teacher_id, center_id, ptc_date, batch_id)
-       VALUES ${valuePlaceholders}
-       RETURNING id, medal_unique_id, enrollment_id, teacher_id, center_id, ptc_date, batch_id, printed_at`,
-      flatValues,
-    );
+    let result;
+    try {
+      result = await client.query(
+        `INSERT INTO medals (enrollment_id, teacher_id, center_id, ptc_date, batch_id)
+         VALUES ${valuePlaceholders}
+         RETURNING id, medal_unique_id, enrollment_id, teacher_id, center_id, ptc_date, batch_id, printed_at`,
+        flatValues,
+      );
+    } catch (err) {
+      if (err.code === "23505") {
+        const conflict = new Error(
+          "One or more medals already exist for the requested enrollments.",
+        );
+        conflict.status = 409;
+        throw conflict;
+      }
+      throw err;
+    }
 
     const medals = result.rows;
     logger.info("Batch medal printed", {
@@ -206,4 +151,4 @@ const getByTeacher = async ({ teacherId, centerId, limit, offset }) => {
   return { rows: dataResult.rows, total: countResult.rows[0].total };
 };
 
-module.exports = { printSingle, printBatch, getByTeacher, BATCH_MAX_SIZE };
+module.exports = { printBatch, getByTeacher, BATCH_MAX_SIZE };

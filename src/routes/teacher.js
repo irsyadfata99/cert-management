@@ -250,7 +250,6 @@ router.get(
           ? undefined
           : req.query.is_reprint === "true";
 
-      // [FIX #10] hapus `page` dari parameter — tidak dipakai di getByTeacher
       const { rows, total } = await certificateService.getByTeacher({
         teacherId,
         centerId: null,
@@ -267,6 +266,50 @@ router.get(
     }
   },
 );
+
+// ── GET /teacher/medals ──────────────────────────────────────
+// Returns the teacher's medal records directly from the medals table.
+// Used by HistoryPage so medal data reflects reality (not derived from certs).
+router.get("/medals", async (req, res, next) => {
+  try {
+    const { teacherId } = teacherContext(req);
+    const { page, limit, offset } = parsePagination(req.query);
+
+    const [dataResult, countResult] = await Promise.all([
+      query(
+        `SELECT med.id, med.medal_unique_id, med.enrollment_id,
+                s.name AS student_name,
+                m.name AS module_name,
+                c.name AS center_name,
+                med.ptc_date, med.report_id, med.printed_at
+         FROM medals med
+         JOIN enrollments e ON e.id = med.enrollment_id
+         JOIN students s    ON s.id = e.student_id
+         JOIN modules m     ON m.id = e.module_id
+         JOIN centers c     ON c.id = med.center_id
+         WHERE med.teacher_id = $1
+         ORDER BY med.printed_at DESC
+         LIMIT $2 OFFSET $3`,
+        [teacherId, limit, offset],
+      ),
+      query(`SELECT COUNT(*)::int AS total FROM medals WHERE teacher_id = $1`, [
+        teacherId,
+      ]),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      ...paginateResponse(
+        dataResult.rows,
+        countResult.rows[0].total,
+        page,
+        limit,
+      ),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.get("/reports", async (req, res, next) => {
   try {

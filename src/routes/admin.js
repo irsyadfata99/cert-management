@@ -510,7 +510,7 @@ router.get(
       const centerId = resolveCenterId(req, req.query.center_id);
       const { page, limit, offset } = parsePagination(req.query);
 
-      const { whereClause, values } = buildWhere([
+      const filters = [
         { col: "u.role", val: "teacher" },
         {
           col: "u.is_active",
@@ -525,14 +525,54 @@ router.get(
           op: "ILIKE",
           transform: (v) => `%${v}%`,
         },
-      ]);
+      ];
 
-      const centerFilter = centerId
-        ? `AND EXISTS (
-           SELECT 1 FROM teacher_centers tc
-           WHERE tc.teacher_id = u.id AND tc.center_id = ${parseInt(centerId)}
-         )`
+      // Use parameterized center filter to avoid inline interpolation
+      if (centerId) {
+        filters.push({ col: "tc_filter.center_id", val: centerId });
+      }
+
+      const { whereClause, values } = buildWhere(
+        centerId
+          ? [
+              { col: "u.role", val: "teacher" },
+              {
+                col: "u.is_active",
+                val:
+                  req.query.is_active === undefined
+                    ? undefined
+                    : req.query.is_active === "true",
+              },
+              {
+                col: "u.name",
+                val: req.query.search,
+                op: "ILIKE",
+                transform: (v) => `%${v}%`,
+              },
+            ]
+          : [
+              { col: "u.role", val: "teacher" },
+              {
+                col: "u.is_active",
+                val:
+                  req.query.is_active === undefined
+                    ? undefined
+                    : req.query.is_active === "true",
+              },
+              {
+                col: "u.name",
+                val: req.query.search,
+                op: "ILIKE",
+                transform: (v) => `%${v}%`,
+              },
+            ],
+      );
+
+      const centerJoin = centerId
+        ? `JOIN teacher_centers tc_filter ON tc_filter.teacher_id = u.id AND tc_filter.center_id = $${values.length + 1}`
         : "";
+
+      const centerValues = centerId ? [centerId] : [];
 
       const orderBy = buildOrderBy(
         req.query.sort_by,
@@ -541,21 +581,18 @@ router.get(
         "name",
       );
 
-      const baseQuery = `
-      FROM users u
-      LEFT JOIN centers c ON c.id = u.center_id
-      ${whereClause} ${centerFilter}
-    `;
+      const baseFrom = `FROM users u LEFT JOIN centers c ON c.id = u.center_id ${centerJoin} ${whereClause}`;
+      const allValues = [...values, ...centerValues];
 
       const [dataResult, countResult] = await Promise.all([
         query(
           `SELECT u.id, u.email, u.name, u.avatar, u.center_id, c.name AS center_name,
                 u.drive_folder_id, u.is_active, u.created_at, u.updated_at
-         ${baseQuery} ${orderBy}
-         LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
-          [...values, limit, offset],
+         ${baseFrom} ${orderBy}
+         LIMIT $${allValues.length + 1} OFFSET $${allValues.length + 2}`,
+          [...allValues, limit, offset],
         ),
-        query(`SELECT COUNT(*)::int AS total ${baseQuery}`, values),
+        query(`SELECT COUNT(*)::int AS total ${baseFrom}`, allValues),
       ]);
 
       const teacherIds = dataResult.rows.map((t) => t.id);
@@ -674,19 +711,20 @@ router.patch(
       const { name, email } = req.body;
       const centerId = resolveCenterId(req, null);
 
-      const teacherCheck = await query(
-        `SELECT u.id, u.email FROM users u
-       WHERE u.id = $1 AND u.role = 'teacher'
-       ${
-         centerId
-           ? `AND EXISTS (
-              SELECT 1 FROM teacher_centers tc
-              WHERE tc.teacher_id = u.id AND tc.center_id = $2
-            )`
-           : ""
-       }`,
-        centerId ? [req.params.id, centerId] : [req.params.id],
-      );
+      const teacherCheckParams = centerId
+        ? [req.params.id, centerId]
+        : [req.params.id];
+
+      const teacherCheckQuery = centerId
+        ? `SELECT u.id, u.email FROM users u
+           WHERE u.id = $1 AND u.role = 'teacher'
+             AND EXISTS (
+               SELECT 1 FROM teacher_centers tc
+               WHERE tc.teacher_id = u.id AND tc.center_id = $2
+             )`
+        : `SELECT u.id, u.email FROM users u WHERE u.id = $1 AND u.role = 'teacher'`;
+
+      const teacherCheck = await query(teacherCheckQuery, teacherCheckParams);
 
       if (teacherCheck.rows.length === 0) {
         return res.status(404).json({
@@ -971,20 +1009,21 @@ router.patch(
     try {
       const centerId = resolveCenterId(req, null);
 
+      const params = centerId ? [req.params.id, centerId] : [req.params.id];
+      const centerCondition = centerId
+        ? `AND EXISTS (
+             SELECT 1 FROM teacher_centers tc
+             WHERE tc.teacher_id = users.id AND tc.center_id = $2
+           )`
+        : "";
+
       const result = await query(
         `UPDATE users
        SET is_active = FALSE, updated_at = NOW()
        WHERE id = $1 AND role = 'teacher'
-       ${
-         centerId
-           ? `AND EXISTS (
-              SELECT 1 FROM teacher_centers tc
-              WHERE tc.teacher_id = users.id AND tc.center_id = $2
-            )`
-           : ""
-       } AND is_active = TRUE
+       ${centerCondition} AND is_active = TRUE
        RETURNING id, email, name`,
-        centerId ? [req.params.id, centerId] : [req.params.id],
+        params,
       );
 
       if (result.rows.length === 0) {
@@ -1032,7 +1071,6 @@ router.get(
           col: "es.enrollment_status",
           val: req.query.enrollment_status,
         },
-        // [FIX #4] search by student name
         {
           col: "s.name",
           val: req.query.search,
@@ -1064,7 +1102,6 @@ router.get(
            LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
           [...values, limit, offset],
         ),
-        // [FIX #1] tambah JOIN students s agar s.name ILIKE tidak crash di count query
         query(
           `SELECT COUNT(*)::int AS total
            FROM enrollments e
@@ -1381,7 +1418,10 @@ router.get(
     try {
       const { page, limit, offset } = parsePagination(req.query);
 
-      const centerId = req.user.center_id ?? null;
+      // Use center_id from query param; admin multi-center (center_id null) sees all
+      const centerId = req.query.center_id
+        ? parseInt(req.query.center_id)
+        : (req.user.center_id ?? null);
 
       const filters = [
         { col: "c.center_id", val: centerId },

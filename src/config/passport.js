@@ -1,6 +1,6 @@
 const passport = require("passport");
 const { Strategy: GoogleStrategy } = require("passport-google-oauth20");
-const { query } = require("./database");
+const { query, withTransaction } = require("./database");
 const driveService = require("../services/driveService");
 const logger = require("./logger");
 
@@ -67,11 +67,24 @@ passport.use(
         const user = existing.rows[0];
 
         if (!user.is_active) {
+          // ── First login: activate account ──────────────────────────────
+          //
+          // Drive folder creation is attempted BEFORE the DB transaction so
+          // that we never end up with an activated account that has a
+          // partially-written Drive folder ID.  If Drive fails we still
+          // activate the account — the admin can set up the folder later via
+          // the "Setup Drive" action in the dashboard.
+          //
+          // Sequence:
+          //   1. Try to create Drive folder (outside transaction — side effect)
+          //   2. Open transaction → activate user + store folder ID atomically
+          //   3. If transaction fails, log that a dangling Drive folder may
+          //      exist so an admin can clean it up.
+
           let driveFolderId = user.drive_folder_id;
+          let driveCreatedFolderId = null;
 
           if (user.role === "teacher" && !driveFolderId) {
-            // [FIX #12] Ambil semua center teacher (bukan hanya primary)
-            // dan buat Drive folder untuk primary center
             try {
               const centersResult = await query(
                 `SELECT tc.center_id, tc.is_primary, c.drive_folder_id AS center_drive_folder_id
@@ -83,7 +96,6 @@ passport.use(
                 [user.id],
               );
 
-              // Gunakan primary center (atau center pertama jika tidak ada primary)
               const primaryCenter = centersResult.rows[0];
               const centerFolderId = primaryCenter?.center_drive_folder_id;
 
@@ -93,10 +105,11 @@ passport.use(
                   email,
                 });
               } else {
-                driveFolderId = await driveService.createFolder(
+                driveCreatedFolderId = await driveService.createFolder(
                   profile.displayName,
                   centerFolderId,
                 );
+                driveFolderId = driveCreatedFolderId;
                 logger.info("Drive folder created for teacher", {
                   userId: user.id,
                   folderId: driveFolderId,
@@ -104,6 +117,8 @@ passport.use(
                 });
               }
             } catch (driveErr) {
+              // Drive failure is non-fatal — account will still be activated.
+              // Admin can create the folder manually later.
               logger.error("Failed to create Drive folder for teacher", {
                 userId: user.id,
                 error: driveErr.message,
@@ -111,21 +126,44 @@ passport.use(
             }
           }
 
-          await query(
-            `UPDATE users
-             SET google_id        = $1,
-                 avatar           = $2,
-                 drive_folder_id  = $3,
-                 is_active        = TRUE,
-                 updated_at       = NOW()
-             WHERE id = $4`,
-            [
-              profile.id,
-              profile.photos?.[0]?.value ?? null,
-              driveFolderId,
-              user.id,
-            ],
-          );
+          // Activate account inside a transaction.  If this fails after
+          // driveCreatedFolderId was set, log a warning so the orphaned
+          // Drive folder can be identified and cleaned up.
+          let activatedUser;
+          try {
+            activatedUser = await withTransaction(async (client) => {
+              const result = await client.query(
+                `UPDATE users
+                 SET google_id        = $1,
+                     avatar           = $2,
+                     drive_folder_id  = $3,
+                     is_active        = TRUE,
+                     updated_at       = NOW()
+                 WHERE id = $4
+                 RETURNING id, email, name, avatar, role, center_id, drive_folder_id, is_active`,
+                [
+                  profile.id,
+                  profile.photos?.[0]?.value ?? null,
+                  driveFolderId,
+                  user.id,
+                ],
+              );
+              return result.rows[0];
+            });
+          } catch (txErr) {
+            if (driveCreatedFolderId) {
+              logger.error(
+                "DB transaction failed after Drive folder was created. " +
+                  "Orphaned Drive folder may need manual cleanup.",
+                {
+                  userId: user.id,
+                  orphanedFolderId: driveCreatedFolderId,
+                  error: txErr.message,
+                },
+              );
+            }
+            throw txErr;
+          }
 
           logger.info("User account activated on first login", {
             userId: user.id,
@@ -133,19 +171,11 @@ passport.use(
             role: user.role,
           });
 
-          const activatedUser = {
-            ...user,
-            google_id: profile.id,
-            avatar: profile.photos?.[0]?.value ?? null,
-            drive_folder_id: driveFolderId,
-            is_active: true,
-          };
-
           if (req.session) req.session.cachedUser = activatedUser;
-
           return done(null, activatedUser);
         }
 
+        // ── Returning active user: refresh avatar / google_id if changed ──
         const newAvatar = profile.photos?.[0]?.value ?? null;
         if (newAvatar !== user.avatar || !user.google_id) {
           await query(
