@@ -21,6 +21,7 @@ const {
   assignTeacherCenterBody,
   createEnrollmentBody,
   listEnrollmentsQuery,
+  monitoringReprintsQuery,
   idParam,
   paginationQuery,
 } = require("../validators");
@@ -326,9 +327,6 @@ router.get(
   },
 );
 
-// ── [NEW] GET /admin/stock ────────────────────────────────────
-// Return semua center stock tanpa filter has_alert.
-// Accessible oleh admin & super_admin.
 router.get("/stock", async (req, res, next) => {
   try {
     const result = await query(
@@ -1366,5 +1364,95 @@ router.get("/monitoring/stock-alerts", async (req, res, next) => {
     next(err);
   }
 });
+
+// ── [NEW] GET /admin/monitoring/reprints ─────────────────────
+// Auto-filter ke center_id admin yang sedang login.
+// Super admin tidak kena filter ini karena route ini hanya
+// accessible oleh role "admin" (super_admin pakai /super-admin/...).
+router.get(
+  "/monitoring/reprints",
+  validate(monitoringReprintsQuery, "query"),
+  async (req, res, next) => {
+    try {
+      const { page, limit, offset } = parsePagination(req.query);
+
+      // Admin selalu difilter ke center miliknya sendiri
+      const centerId = req.user.center_id ?? null;
+
+      const filters = [
+        { col: "c.center_id", val: centerId },
+        {
+          col: "c.printed_at",
+          val: req.query.date_from,
+          op: ">=",
+          transform: (v) => new Date(v),
+        },
+        {
+          col: "c.printed_at",
+          val: req.query.date_to,
+          op: "<=",
+          transform: (v) => new Date(`${v}T23:59:59`),
+        },
+      ];
+
+      const { whereClause, values } = buildWhere(filters);
+
+      const reprintWhere = whereClause
+        ? `${whereClause} AND c.is_reprint = TRUE`
+        : `WHERE c.is_reprint = TRUE`;
+
+      const [dataResult, countResult] = await Promise.all([
+        query(
+          `SELECT
+             c.id                  AS reprint_cert_id,
+             c.cert_unique_id      AS reprint_cert_unique_id,
+             c.printed_at          AS reprinted_at,
+             c.ptc_date,
+             u.id                  AS teacher_id,
+             u.name                AS teacher_name,
+             u.email               AS teacher_email,
+             s.name                AS student_name,
+             m.name                AS module_name,
+             cn.id                 AS center_id,
+             cn.name               AS center_name,
+             oc.id                 AS original_cert_id,
+             oc.cert_unique_id     AS original_cert_unique_id,
+             oc.printed_at         AS original_printed_at
+           FROM certificates c
+           JOIN enrollments e      ON e.id  = c.enrollment_id
+           JOIN users u            ON u.id  = c.teacher_id
+           JOIN students s         ON s.id  = e.student_id
+           JOIN modules m          ON m.id  = e.module_id
+           JOIN centers cn         ON cn.id = c.center_id
+           LEFT JOIN certificates oc ON oc.id = c.original_cert_id
+           ${reprintWhere}
+           ORDER BY c.printed_at DESC
+           LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+          [...values, limit, offset],
+        ),
+        query(
+          `SELECT COUNT(*)::int AS total
+           FROM certificates c
+           JOIN enrollments e ON e.id = c.enrollment_id
+           JOIN centers cn    ON cn.id = c.center_id
+           ${reprintWhere}`,
+          values,
+        ),
+      ]);
+
+      res.status(200).json({
+        success: true,
+        ...paginateResponse(
+          dataResult.rows,
+          countResult.rows[0].total,
+          page,
+          limit,
+        ),
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 module.exports = router;

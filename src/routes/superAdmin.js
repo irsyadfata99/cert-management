@@ -17,6 +17,7 @@ const {
   listAdminsQuery,
   monitoringUploadQuery,
   monitoringActivityQuery,
+  monitoringReprintsQuery,
   downloadEnrollmentsQuery,
   idParam,
   paginationQuery,
@@ -116,7 +117,6 @@ router.post("/centers", validate(createCenterBody), async (req, res, next) => {
         [centerId],
       );
 
-      // [FIX] Auto-create Google Drive folder untuk center baru
       let driveFolderId = null;
       try {
         driveFolderId = await driveService.createCenterFolder(name);
@@ -127,7 +127,6 @@ router.post("/centers", validate(createCenterBody), async (req, res, next) => {
           );
         }
       } catch (driveErr) {
-        // Drive error tidak membatalkan pembuatan center — log saja
         logger.warn("Failed to create Drive folder for center", {
           centerId,
           name,
@@ -567,6 +566,100 @@ router.get("/monitoring/stock-alerts", async (req, res, next) => {
   }
 });
 
+// ── [NEW] GET /super-admin/monitoring/reprints ────────────────
+// Reprint log: siapa yang reprint, atas nama student siapa
+router.get(
+  "/monitoring/reprints",
+  validate(monitoringReprintsQuery, "query"),
+  async (req, res, next) => {
+    try {
+      const { page, limit, offset } = parsePagination(req.query);
+
+      const filters = [
+        {
+          col: "c.center_id",
+          val: req.query.center_id ? parseInt(req.query.center_id) : undefined,
+        },
+        {
+          col: "c.printed_at",
+          val: req.query.date_from,
+          op: ">=",
+          transform: (v) => new Date(v),
+        },
+        {
+          col: "c.printed_at",
+          val: req.query.date_to,
+          op: "<=",
+          transform: (v) => new Date(`${v}T23:59:59`),
+        },
+      ];
+
+      const { whereClause, values } = buildWhere(filters);
+
+      // Tambahkan is_reprint = TRUE ke WHERE
+      const reprintWhere = whereClause
+        ? `${whereClause} AND c.is_reprint = TRUE`
+        : `WHERE c.is_reprint = TRUE`;
+
+      const [dataResult, countResult] = await Promise.all([
+        query(
+          `SELECT
+             c.id                  AS reprint_cert_id,
+             c.cert_unique_id      AS reprint_cert_unique_id,
+             c.printed_at          AS reprinted_at,
+             c.ptc_date,
+             -- Teacher yang melakukan reprint
+             u.id                  AS teacher_id,
+             u.name                AS teacher_name,
+             u.email               AS teacher_email,
+             -- Student atas nama siapa reprint dilakukan
+             s.name                AS student_name,
+             -- Module
+             m.name                AS module_name,
+             -- Center
+             cn.id                 AS center_id,
+             cn.name               AS center_name,
+             -- Original certificate
+             oc.id                 AS original_cert_id,
+             oc.cert_unique_id     AS original_cert_unique_id,
+             oc.printed_at         AS original_printed_at
+           FROM certificates c
+           JOIN enrollments e      ON e.id  = c.enrollment_id
+           JOIN users u            ON u.id  = c.teacher_id
+           JOIN students s         ON s.id  = e.student_id
+           JOIN modules m          ON m.id  = e.module_id
+           JOIN centers cn         ON cn.id = c.center_id
+           LEFT JOIN certificates oc ON oc.id = c.original_cert_id
+           ${reprintWhere}
+           ORDER BY c.printed_at DESC
+           LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+          [...values, limit, offset],
+        ),
+        query(
+          `SELECT COUNT(*)::int AS total
+           FROM certificates c
+           JOIN enrollments e ON e.id = c.enrollment_id
+           JOIN centers cn    ON cn.id = c.center_id
+           ${reprintWhere}`,
+          values,
+        ),
+      ]);
+
+      res.status(200).json({
+        success: true,
+        ...paginateResponse(
+          dataResult.rows,
+          countResult.rows[0].total,
+          page,
+          limit,
+        ),
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // ============================================================
 // DOWNLOAD
 // ============================================================
@@ -645,7 +738,6 @@ router.get(
         { key: "enrolled_at", label: "Enrolled At" },
       ];
 
-      // Map raw status value → human-readable label
       const STATUS_LABELS = {
         pending: "Pending",
         cert_printed: "Cert Printed",
@@ -654,7 +746,6 @@ router.get(
         complete: "Complete",
       };
 
-      // Format date → "13 Mar 2026 13:58" in WIB (UTC+7)
       const formatDate = (val) => {
         if (!val) return "";
         const d = val instanceof Date ? val : new Date(val);
@@ -669,7 +760,7 @@ router.get(
             minute: "2-digit",
             hour12: false,
           })
-          .replace(",", ""); // "13 Mar 2026 13:58"
+          .replace(",", "");
       };
 
       const escape = (val) => {
