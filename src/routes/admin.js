@@ -327,23 +327,26 @@ router.get(
   },
 );
 
+// ── [UPDATED] /admin/stock — now queries vw_stock_alerts which
+// includes certificate batch data (range_start, range_end, current_position)
 router.get("/stock", async (req, res, next) => {
   try {
     const result = await query(
       `SELECT
-         c.id                                          AS center_id,
-         c.name                                        AS center_name,
-         COALESCE(cs.quantity, 0)                      AS cert_stock,
-         COALESCE(cs.low_stock_threshold, 10)          AS cert_threshold,
-         COALESCE(cs.quantity, 0) <= COALESCE(cs.low_stock_threshold, 10) AS cert_low_stock,
-         COALESCE(ms.quantity, 0)                      AS medal_stock,
-         COALESCE(ms.low_stock_threshold, 10)          AS medal_threshold,
-         COALESCE(ms.quantity, 0) <= COALESCE(ms.low_stock_threshold, 10) AS medal_low_stock
-       FROM centers c
-       LEFT JOIN certificate_stock cs ON cs.center_id = c.id
-       LEFT JOIN medal_stock ms       ON ms.center_id = c.id
-       WHERE c.is_active = TRUE
-       ORDER BY c.name`,
+         center_id,
+         center_name,
+         cert_quantity,
+         cert_threshold,
+         cert_low_stock,
+         cert_range_start,
+         cert_range_end,
+         cert_current_position,
+         medal_quantity,
+         medal_threshold,
+         medal_low_stock,
+         has_alert
+       FROM vw_stock_alerts
+       ORDER BY center_name`,
     );
 
     res.status(200).json({ success: true, data: result.rows });
@@ -509,28 +512,6 @@ router.get(
     try {
       const centerId = resolveCenterId(req, req.query.center_id);
       const { page, limit, offset } = parsePagination(req.query);
-
-      const filters = [
-        { col: "u.role", val: "teacher" },
-        {
-          col: "u.is_active",
-          val:
-            req.query.is_active === undefined
-              ? undefined
-              : req.query.is_active === "true",
-        },
-        {
-          col: "u.name",
-          val: req.query.search,
-          op: "ILIKE",
-          transform: (v) => `%${v}%`,
-        },
-      ];
-
-      // Use parameterized center filter to avoid inline interpolation
-      if (centerId) {
-        filters.push({ col: "tc_filter.center_id", val: centerId });
-      }
 
       const { whereClause, values } = buildWhere(
         centerId
@@ -1395,10 +1376,19 @@ router.get("/monitoring/stock-alerts", async (req, res, next) => {
       : `WHERE has_alert = TRUE`;
 
     const result = await query(
-      `SELECT center_id, center_name,
-              cert_quantity, cert_threshold, cert_low_stock,
-              medal_quantity, medal_threshold, medal_low_stock,
-              has_alert
+      `SELECT
+         center_id,
+         center_name,
+         cert_quantity,
+         cert_threshold,
+         cert_low_stock,
+         cert_range_start,
+         cert_range_end,
+         cert_current_position,
+         medal_quantity,
+         medal_threshold,
+         medal_low_stock,
+         has_alert
        FROM vw_stock_alerts
        ${hasAlertClause}
        ORDER BY center_name`,
@@ -1418,7 +1408,6 @@ router.get(
     try {
       const { page, limit, offset } = parsePagination(req.query);
 
-      // Use center_id from query param; admin multi-center (center_id null) sees all
       const centerId = req.query.center_id
         ? parseInt(req.query.center_id)
         : (req.user.center_id ?? null);

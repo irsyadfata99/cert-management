@@ -1,6 +1,177 @@
 const { query } = require("../config/database");
 const logger = require("../config/logger");
 
+// ============================================================
+// CERTIFICATE BATCH STOCK
+// ============================================================
+
+const getCertificateBatch = async (centerId) => {
+  const result = await query(
+    `SELECT
+       b.id,
+       b.center_id,
+       c.name AS center_name,
+       b.range_start,
+       b.range_end,
+       b.current_position,
+       b.range_end - b.current_position + 1 AS available,
+       b.current_position - b.range_start   AS used,
+       b.created_at,
+       b.updated_at
+     FROM certificate_stock_batches b
+     JOIN centers c ON c.id = b.center_id
+     WHERE b.center_id = $1`,
+    [centerId],
+  );
+  return result.rows[0] ?? null;
+};
+
+const addCertificateBatch = async ({
+  centerId,
+  rangeStart,
+  rangeEnd,
+  addedBy,
+}) => {
+  if (!Number.isInteger(rangeStart) || rangeStart <= 0) {
+    const err = new Error("range_start must be a positive integer");
+    err.status = 400;
+    throw err;
+  }
+
+  if (!Number.isInteger(rangeEnd) || rangeEnd <= 0) {
+    const err = new Error("range_end must be a positive integer");
+    err.status = 400;
+    throw err;
+  }
+
+  if (rangeStart > rangeEnd) {
+    const err = new Error("range_start must be <= range_end");
+    err.status = 400;
+    throw err;
+  }
+
+  try {
+    const result = await query(
+      `SELECT fn_add_certificate_batch($1, $2, $3) AS result`,
+      [centerId, rangeStart, rangeEnd],
+    );
+
+    const data = result.rows[0].result;
+    logger.info("Certificate batch added", {
+      centerId,
+      rangeStart,
+      rangeEnd,
+      action: data.action,
+      addedBy,
+    });
+
+    return data;
+  } catch (err) {
+    throw normalizeBatchError(err);
+  }
+};
+
+const transferCertificateBatch = async ({
+  fromCenterId,
+  toCenterId,
+  quantity,
+  transferredBy,
+}) => {
+  if (fromCenterId === toCenterId) {
+    const err = new Error("Source and destination centers must be different");
+    err.status = 400;
+    throw err;
+  }
+
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    const err = new Error("Quantity must be a positive integer");
+    err.status = 400;
+    throw err;
+  }
+
+  try {
+    const result = await query(
+      `SELECT fn_transfer_certificate_batch($1, $2, $3) AS result`,
+      [fromCenterId, toCenterId, quantity],
+    );
+
+    const data = result.rows[0].result;
+    logger.info("Certificate batch transferred", {
+      fromCenterId,
+      toCenterId,
+      quantity,
+      transferStart: data.transfer_start,
+      transferEnd: data.transfer_end,
+      transferredBy,
+    });
+
+    return data;
+  } catch (err) {
+    throw normalizeBatchError(err);
+  }
+};
+
+const normalizeBatchError = (err) => {
+  const msg = err.message ?? "";
+
+  if (msg.includes("range_start must be")) {
+    const e = new Error(msg);
+    e.status = 400;
+    return e;
+  }
+
+  if (msg.includes("range_start and range_end must be positive")) {
+    const e = new Error(msg);
+    e.status = 400;
+    return e;
+  }
+
+  if (msg.includes("New range_end")) {
+    const e = new Error(msg);
+    e.status = 400;
+    return e;
+  }
+
+  if (msg.includes("Insufficient stock")) {
+    const e = new Error(msg);
+    e.status = 400;
+    return e;
+  }
+
+  if (
+    msg.includes("No batch found") ||
+    msg.includes("No certificate batch found")
+  ) {
+    const e = new Error(msg);
+    e.status = 404;
+    return e;
+  }
+
+  if (msg.includes("Certificate stock exhausted")) {
+    const e = new Error("Certificate stock exhausted for this center");
+    e.status = 400;
+    return e;
+  }
+
+  if (msg.includes("not contiguous")) {
+    const e = new Error(msg);
+    e.status = 400;
+    return e;
+  }
+
+  if (msg.includes("Source and destination centers must be different")) {
+    const e = new Error(msg);
+    e.status = 400;
+    return e;
+  }
+
+  return err;
+};
+
+// ============================================================
+// MEDAL STOCK (tidak berubah)
+// ============================================================
+
 const normalizeTransferError = (err) => {
   const msg = err.message ?? "";
 
@@ -48,27 +219,56 @@ const normalizeTransferError = (err) => {
 };
 
 const getStockByCenter = async (centerId) => {
-  const result = await query(
-    `SELECT
-       c.id AS center_id, c.name AS center_name,
-       cs.quantity AS cert_quantity, cs.low_stock_threshold AS cert_threshold,
-       cs.quantity <= cs.low_stock_threshold AS cert_low_stock,
-       ms.quantity AS medal_quantity, ms.low_stock_threshold AS medal_threshold,
-       ms.quantity <= ms.low_stock_threshold AS medal_low_stock
-     FROM centers c
-     LEFT JOIN certificate_stock cs ON cs.center_id = c.id
-     LEFT JOIN medal_stock ms       ON ms.center_id = c.id
-     WHERE c.id = $1 AND c.is_active = TRUE`,
-    [centerId],
-  );
+  const [batchResult, medalResult] = await Promise.all([
+    query(
+      `SELECT
+         b.center_id,
+         c.name AS center_name,
+         b.range_start,
+         b.range_end,
+         b.current_position,
+         b.range_end - b.current_position + 1 AS cert_available,
+         b.current_position - b.range_start   AS cert_used
+       FROM certificate_stock_batches b
+       JOIN centers c ON c.id = b.center_id
+       WHERE b.center_id = $1`,
+      [centerId],
+    ),
+    query(
+      `SELECT
+         c.id AS center_id, c.name AS center_name,
+         ms.quantity AS medal_quantity,
+         ms.low_stock_threshold AS medal_threshold,
+         ms.quantity <= ms.low_stock_threshold AS medal_low_stock
+       FROM centers c
+       LEFT JOIN medal_stock ms ON ms.center_id = c.id
+       WHERE c.id = $1 AND c.is_active = TRUE`,
+      [centerId],
+    ),
+  ]);
 
-  if (result.rows.length === 0) {
+  if (medalResult.rows.length === 0) {
     const err = new Error("Center not found or inactive");
     err.status = 404;
     throw err;
   }
 
-  return result.rows[0];
+  const batch = batchResult.rows[0] ?? null;
+  const medal = medalResult.rows[0];
+
+  return {
+    center_id: medal.center_id,
+    center_name: medal.center_name,
+    cert_range_start: batch?.range_start ?? null,
+    cert_range_end: batch?.range_end ?? null,
+    cert_current_position: batch?.current_position ?? null,
+    cert_quantity: batch?.cert_available ?? 0,
+    cert_used: batch?.cert_used ?? 0,
+    cert_low_stock: false, // threshold check via vw_stock_alerts
+    medal_quantity: medal.medal_quantity ?? 0,
+    medal_threshold: medal.medal_threshold ?? 10,
+    medal_low_stock: medal.medal_low_stock ?? false,
+  };
 };
 
 const getAllStock = async () => {
@@ -78,23 +278,15 @@ const getAllStock = async () => {
   return result.rows;
 };
 
-const addStock = async ({ centerId, type, quantity, addedBy }) => {
-  if (!["certificate", "medal"].includes(type)) {
-    const err = new Error("Invalid stock type. Use: certificate or medal");
-    err.status = 400;
-    throw err;
-  }
-
+const addMedalStock = async ({ centerId, quantity, addedBy }) => {
   if (!Number.isInteger(quantity) || quantity <= 0) {
     const err = new Error("Quantity must be a positive integer");
     err.status = 400;
     throw err;
   }
 
-  const table = type === "certificate" ? "certificate_stock" : "medal_stock";
-
   const result = await query(
-    `UPDATE ${table}
+    `UPDATE medal_stock
      SET quantity = quantity + $1, updated_at = NOW()
      WHERE center_id = $2
      RETURNING quantity, low_stock_threshold`,
@@ -107,11 +299,11 @@ const addStock = async ({ centerId, type, quantity, addedBy }) => {
     throw err;
   }
 
-  logger.info("Stock added", { centerId, type, quantity, addedBy });
+  logger.info("Medal stock added", { centerId, quantity, addedBy });
 
   return {
     center_id: centerId,
-    type,
+    type: "medal",
     quantity: result.rows[0].quantity,
     low_stock_threshold: result.rows[0].low_stock_threshold,
     low_stock: result.rows[0].quantity <= result.rows[0].low_stock_threshold,
@@ -131,6 +323,7 @@ const updateThreshold = async ({ centerId, type, threshold, updatedBy }) => {
     throw err;
   }
 
+  // Certificate threshold tetap di certificate_stock untuk low stock alert
   const table = type === "certificate" ? "certificate_stock" : "medal_stock";
 
   const result = await query(
@@ -157,24 +350,16 @@ const updateThreshold = async ({ centerId, type, threshold, updatedBy }) => {
   return {
     center_id: centerId,
     type,
-    quantity: result.rows[0].quantity,
     low_stock_threshold: result.rows[0].low_stock_threshold,
   };
 };
 
-const transferStock = async ({
-  type,
+const transferMedalStock = async ({
   fromCenterId,
   toCenterId,
   quantity,
   transferredBy,
 }) => {
-  if (!["certificate", "medal"].includes(type)) {
-    const err = new Error("Invalid stock type. Use: certificate or medal");
-    err.status = 400;
-    throw err;
-  }
-
   if (!Number.isInteger(quantity) || quantity <= 0) {
     const err = new Error("Quantity must be a positive integer");
     err.status = 400;
@@ -190,11 +375,14 @@ const transferStock = async ({
   try {
     const result = await query(
       `SELECT fn_transfer_stock($1, $2, $3, $4) AS result`,
-      [type, fromCenterId, toCenterId, quantity],
+      ["medal", fromCenterId, toCenterId, quantity],
     );
 
     const transferResult = result.rows[0].result;
-    logger.info("Stock transferred", { ...transferResult, transferredBy });
+    logger.info("Medal stock transferred", {
+      ...transferResult,
+      transferredBy,
+    });
 
     return transferResult;
   } catch (err) {
@@ -203,9 +391,15 @@ const transferStock = async ({
 };
 
 module.exports = {
+  // Certificate batch
+  getCertificateBatch,
+  addCertificateBatch,
+  transferCertificateBatch,
+  // Medal
+  addMedalStock,
+  transferMedalStock,
+  updateThreshold,
+  // General
   getStockByCenter,
   getAllStock,
-  addStock,
-  updateThreshold,
-  transferStock,
 };

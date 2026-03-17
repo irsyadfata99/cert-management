@@ -595,3 +595,247 @@ WHERE c.is_active = TRUE;
 -- INSERT INTO users (email, name, role, is_active)
 -- VALUES ('superadmin@gmail.com', 'Super Admin', 'super_admin', TRUE)
 -- ON CONFLICT (email) DO NOTHING;
+
+-- Step 1: Buat tabel dulu
+CREATE TABLE IF NOT EXISTS certificate_stock_batches (
+  id                SERIAL    PRIMARY KEY,
+  center_id         INTEGER   NOT NULL UNIQUE REFERENCES centers(id) ON DELETE RESTRICT,
+  range_start       INTEGER   NOT NULL,
+  range_end         INTEGER   NOT NULL,
+  current_position  INTEGER   NOT NULL,
+  created_at        TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMP NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_range_valid
+    CHECK (range_start <= range_end),
+  CONSTRAINT chk_position_valid
+    CHECK (current_position >= range_start AND current_position <= range_end + 1)
+);
+
+-- Step 2: Index
+CREATE INDEX IF NOT EXISTS idx_cert_stock_batches_center_id
+  ON certificate_stock_batches (center_id);
+
+-- Step 3: Trigger updated_at
+DROP TRIGGER IF EXISTS trg_cert_stock_batches_updated_at ON certificate_stock_batches;
+CREATE TRIGGER trg_cert_stock_batches_updated_at
+  BEFORE UPDATE ON certificate_stock_batches
+  FOR EACH ROW EXECUTE FUNCTION fn_update_updated_at();
+
+  -- Step 4: Hapus sequence & function lama
+DROP TRIGGER IF EXISTS trg_certificates_unique_id ON certificates;
+DROP FUNCTION IF EXISTS fn_set_cert_unique_id();
+DROP FUNCTION IF EXISTS fn_generate_cert_id();
+DROP SEQUENCE IF EXISTS cert_id_seq;
+
+-- Step 5: Function assign cert dari batch
+CREATE OR REPLACE FUNCTION fn_assign_cert_from_batch(p_center_id INTEGER)
+RETURNS VARCHAR AS $$
+DECLARE
+  v_position  INTEGER;
+  v_range_end INTEGER;
+BEGIN
+  SELECT current_position, range_end
+  INTO v_position, v_range_end
+  FROM certificate_stock_batches
+  WHERE center_id = p_center_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'No certificate batch found for center_id %', p_center_id;
+  END IF;
+
+  IF v_position > v_range_end THEN
+    RAISE EXCEPTION 'Certificate stock exhausted for center_id %', p_center_id;
+  END IF;
+
+  UPDATE certificate_stock_batches
+  SET current_position = current_position + 1,
+      updated_at = NOW()
+  WHERE center_id = p_center_id;
+
+  RETURN 'CERT-' || LPAD(v_position::TEXT, 6, '0');
+END;
+$$ LANGUAGE plpgsql;
+
+-- Step 6: Trigger baru certificates
+CREATE OR REPLACE FUNCTION fn_set_cert_unique_id()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.cert_unique_id IS NULL OR NEW.cert_unique_id = '' THEN
+    NEW.cert_unique_id := fn_assign_cert_from_batch(NEW.center_id);
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_certificates_unique_id ON certificates;
+CREATE TRIGGER trg_certificates_unique_id
+  BEFORE INSERT ON certificates
+  FOR EACH ROW EXECUTE FUNCTION fn_set_cert_unique_id();
+
+-- Step 7: Function tambah/extend batch
+CREATE OR REPLACE FUNCTION fn_add_certificate_batch(
+  p_center_id   INTEGER,
+  p_range_start INTEGER,
+  p_range_end   INTEGER
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_existing RECORD;
+BEGIN
+  IF p_range_start > p_range_end THEN
+    RAISE EXCEPTION 'range_start must be <= range_end';
+  END IF;
+
+  IF p_range_start <= 0 OR p_range_end <= 0 THEN
+    RAISE EXCEPTION 'range_start and range_end must be positive integers';
+  END IF;
+
+  SELECT * INTO v_existing
+  FROM certificate_stock_batches
+  WHERE center_id = p_center_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    INSERT INTO certificate_stock_batches
+      (center_id, range_start, range_end, current_position)
+    VALUES
+      (p_center_id, p_range_start, p_range_end, p_range_start);
+
+    RETURN jsonb_build_object(
+      'action', 'created',
+      'center_id', p_center_id,
+      'range_start', p_range_start,
+      'range_end', p_range_end,
+      'current_position', p_range_start,
+      'available', p_range_end - p_range_start + 1
+    );
+  ELSE
+    IF p_range_end <= v_existing.range_end THEN
+      RAISE EXCEPTION 'New range_end (%) must be greater than existing range_end (%)',
+        p_range_end, v_existing.range_end;
+    END IF;
+
+    UPDATE certificate_stock_batches
+    SET range_end = p_range_end,
+        updated_at = NOW()
+    WHERE center_id = p_center_id;
+
+    RETURN jsonb_build_object(
+      'action', 'extended',
+      'center_id', p_center_id,
+      'range_start', v_existing.range_start,
+      'range_end', p_range_end,
+      'current_position', v_existing.current_position,
+      'available', p_range_end - v_existing.current_position + 1
+    );
+  END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Step 8: Function transfer batch
+CREATE OR REPLACE FUNCTION fn_transfer_certificate_batch(
+  p_from_center INTEGER,
+  p_to_center   INTEGER,
+  p_quantity    INTEGER
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_from           RECORD;
+  v_to             RECORD;
+  v_transfer_start INTEGER;
+  v_transfer_end   INTEGER;
+  v_available      INTEGER;
+BEGIN
+  IF p_from_center = p_to_center THEN
+    RAISE EXCEPTION 'Source and destination centers must be different';
+  END IF;
+
+  IF p_quantity <= 0 THEN
+    RAISE EXCEPTION 'Quantity must be greater than 0';
+  END IF;
+
+  SELECT * INTO v_from
+  FROM certificate_stock_batches
+  WHERE center_id = p_from_center
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'No batch found for source center_id %', p_from_center;
+  END IF;
+
+  v_available := v_from.range_end - v_from.current_position + 1;
+
+  IF p_quantity > v_available THEN
+    RAISE EXCEPTION 'Insufficient stock. Available: %, Requested: %',
+      v_available, p_quantity;
+  END IF;
+
+  v_transfer_end   := v_from.range_end;
+  v_transfer_start := v_from.range_end - p_quantity + 1;
+
+  UPDATE certificate_stock_batches
+  SET range_end  = v_transfer_start - 1,
+      updated_at = NOW()
+  WHERE center_id = p_from_center;
+
+  SELECT * INTO v_to
+  FROM certificate_stock_batches
+  WHERE center_id = p_to_center
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    INSERT INTO certificate_stock_batches
+      (center_id, range_start, range_end, current_position)
+    VALUES
+      (p_to_center, v_transfer_start, v_transfer_end, v_transfer_start);
+  ELSE
+    IF v_transfer_start != v_to.range_end + 1 THEN
+      RAISE EXCEPTION 'Transfer range is not contiguous with destination batch. Destination ends at %, transfer starts at %',
+        v_to.range_end, v_transfer_start;
+    END IF;
+
+    UPDATE certificate_stock_batches
+    SET range_end  = v_transfer_end,
+        updated_at = NOW()
+    WHERE center_id = p_to_center;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'from_center_id', p_from_center,
+    'to_center_id', p_to_center,
+    'transfer_start', v_transfer_start,
+    'transfer_end', v_transfer_end,
+    'quantity', p_quantity,
+    'from_remaining', v_transfer_start - 1 - v_from.range_start + 1
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+-- Step 9: Drop & recreate vw_stock_alerts
+DROP VIEW IF EXISTS vw_stock_alerts;
+
+CREATE OR REPLACE VIEW vw_stock_alerts AS
+SELECT
+  c.id                                                              AS center_id,
+  c.name                                                            AS center_name,
+  COALESCE(b.range_end - b.current_position + 1, 0)                AS cert_quantity,
+  COALESCE(cs.low_stock_threshold, 10)                             AS cert_threshold,
+  COALESCE(b.range_end - b.current_position + 1, 0)
+    <= COALESCE(cs.low_stock_threshold, 10)                        AS cert_low_stock,
+  b.range_start                                                     AS cert_range_start,
+  b.range_end                                                       AS cert_range_end,
+  b.current_position                                                AS cert_current_position,
+  ms.quantity                                                       AS medal_quantity,
+  ms.low_stock_threshold                                            AS medal_threshold,
+  ms.quantity <= ms.low_stock_threshold                             AS medal_low_stock,
+  (
+    COALESCE(b.range_end - b.current_position + 1, 0)
+      <= COALESCE(cs.low_stock_threshold, 10) OR
+    ms.quantity <= ms.low_stock_threshold
+  )                                                                 AS has_alert
+FROM centers c
+LEFT JOIN certificate_stock_batches b ON b.center_id = c.id
+LEFT JOIN certificate_stock cs        ON cs.center_id = c.id
+LEFT JOIN medal_stock ms              ON ms.center_id = c.id
+WHERE c.is_active = TRUE;

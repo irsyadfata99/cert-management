@@ -4,8 +4,10 @@ const { isAuthenticated, authorize } = require("../middleware/authorize");
 const { apiLimiter, uploadLimiter } = require("../middleware/rateLimiter");
 const {
   validate,
-  addStockBody,
-  transferStockBody,
+  addCertificateBatchBody,
+  transferCertificateBatchBody,
+  addMedalStockBody,
+  transferMedalStockBody,
   updateThresholdBody,
   idParam,
 } = require("../validators");
@@ -59,12 +61,17 @@ const handleMulterError = (err, req, res, next) => {
   next(err);
 };
 
-// ── Helper: resolve center_id for admin & super_admin ──────────
+// ── Helper: resolve center_id ──────────────────────────────
 const resolveStockCenterId = (req, paramCenterId) => {
   if (paramCenterId) return parseInt(paramCenterId);
   return req.user.center_id ?? undefined;
 };
 
+// ============================================================
+// STOCK ENDPOINTS
+// ============================================================
+
+// GET /drive/stock — all centers stock overview
 router.get(
   "/stock",
   authorize("admin", "super_admin"),
@@ -82,13 +89,41 @@ router.get(
   },
 );
 
-router.post(
-  "/stock/add",
+// GET /drive/stock/batch/:centerId — detail batch satu center
+router.get(
+  "/stock/batch/:centerId",
   authorize("admin", "super_admin"),
-  validate(addStockBody),
   async (req, res, next) => {
     try {
-      const { type, quantity, center_id } = req.body;
+      const centerId = parseInt(req.params.centerId);
+      const data = await stockService.getCertificateBatch(centerId);
+
+      if (!data) {
+        return res.status(404).json({
+          success: false,
+          message: "No certificate batch found for this center",
+        });
+      }
+
+      res.status(200).json({ success: true, data });
+    } catch (err) {
+      if (err.status)
+        return res
+          .status(err.status)
+          .json({ success: false, message: err.message });
+      next(err);
+    }
+  },
+);
+
+// POST /drive/stock/certificate/add — tambah/extend certificate batch
+router.post(
+  "/stock/certificate/add",
+  authorize("admin", "super_admin"),
+  validate(addCertificateBatchBody),
+  async (req, res, next) => {
+    try {
+      const { range_start, range_end, center_id } = req.body;
       const centerId = resolveStockCenterId(req, center_id);
 
       if (!centerId) {
@@ -97,17 +132,18 @@ router.post(
           .json({ success: false, message: "center_id is required" });
       }
 
-      const data = await stockService.addStock({
+      const data = await stockService.addCertificateBatch({
         centerId,
-        type,
-        quantity,
+        rangeStart: range_start,
+        rangeEnd: range_end,
         addedBy: req.user.id,
       });
 
-      logger.info("Stock added via API", {
+      logger.info("Certificate batch added via API", {
         centerId,
-        type,
-        quantity,
+        rangeStart: range_start,
+        rangeEnd: range_end,
+        action: data.action,
         addedBy: req.user.id,
       });
 
@@ -122,24 +158,216 @@ router.post(
   },
 );
 
+// POST /drive/stock/certificate/transfer — transfer certificate batch antar center
 router.post(
-  "/stock/transfer",
+  "/stock/certificate/transfer",
   authorize("admin", "super_admin"),
-  validate(transferStockBody),
+  validate(transferCertificateBatchBody),
   async (req, res, next) => {
     try {
-      const { type, from_center_id, to_center_id, quantity } = req.body;
+      const { from_center_id, to_center_id, quantity } = req.body;
 
-      const data = await stockService.transferStock({
-        type,
+      // Preview transfer range sebelum eksekusi (untuk konfirmasi di frontend)
+      const fromBatch = await stockService.getCertificateBatch(from_center_id);
+
+      if (!fromBatch) {
+        return res.status(404).json({
+          success: false,
+          message: "No certificate batch found for source center",
+        });
+      }
+
+      const available = fromBatch.range_end - fromBatch.current_position + 1;
+      if (quantity > available) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient stock. Available: ${available}, Requested: ${quantity}`,
+          data: {
+            available,
+            transfer_start: fromBatch.range_end - quantity + 1,
+            transfer_end: fromBatch.range_end,
+          },
+        });
+      }
+
+      const data = await stockService.transferCertificateBatch({
         fromCenterId: from_center_id,
         toCenterId: to_center_id,
         quantity,
         transferredBy: req.user.id,
       });
 
-      logger.info("Stock transferred", {
-        type,
+      logger.info("Certificate batch transferred via API", {
+        fromCenterId: from_center_id,
+        toCenterId: to_center_id,
+        quantity,
+        transferStart: data.transfer_start,
+        transferEnd: data.transfer_end,
+        transferredBy: req.user.id,
+      });
+
+      res.status(200).json({ success: true, data });
+    } catch (err) {
+      if (err.status)
+        return res
+          .status(err.status)
+          .json({ success: false, message: err.message });
+      next(err);
+    }
+  },
+);
+
+// GET /drive/stock/certificate/transfer/preview — preview range sebelum transfer
+router.get(
+  "/stock/certificate/transfer/preview",
+  authorize("admin", "super_admin"),
+  async (req, res, next) => {
+    try {
+      const { from_center_id, to_center_id, quantity } = req.query;
+
+      if (!from_center_id || !to_center_id || !quantity) {
+        return res.status(400).json({
+          success: false,
+          message: "from_center_id, to_center_id, and quantity are required",
+        });
+      }
+
+      const qty = parseInt(quantity);
+      const fromId = parseInt(from_center_id);
+      const toId = parseInt(to_center_id);
+
+      if (fromId === toId) {
+        return res.status(400).json({
+          success: false,
+          message: "Source and destination centers must be different",
+        });
+      }
+
+      const [fromBatch, toBatch] = await Promise.all([
+        stockService.getCertificateBatch(fromId),
+        stockService.getCertificateBatch(toId),
+      ]);
+
+      if (!fromBatch) {
+        return res.status(404).json({
+          success: false,
+          message: "No certificate batch found for source center",
+        });
+      }
+
+      const available = fromBatch.range_end - fromBatch.current_position + 1;
+
+      if (qty > available) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient stock. Available: ${available}, Requested: ${qty}`,
+        });
+      }
+
+      const transferStart = fromBatch.range_end - qty + 1;
+      const transferEnd = fromBatch.range_end;
+
+      // Cek apakah contiguous dengan destination batch yang ada
+      let contiguousWarning = null;
+      if (toBatch && transferStart !== toBatch.range_end + 1) {
+        contiguousWarning = `Transfer range (CERT-${String(transferStart).padStart(6, "0")}) is not contiguous with destination batch end (CERT-${String(toBatch.range_end).padStart(6, "0")}). Transfer will be rejected.`;
+      }
+
+      res.status(200).json({
+        success: true,
+        data: {
+          from_center_id: fromId,
+          to_center_id: toId,
+          quantity: qty,
+          transfer_start: transferStart,
+          transfer_end: transferEnd,
+          transfer_start_formatted: `CERT-${String(transferStart).padStart(6, "0")}`,
+          transfer_end_formatted: `CERT-${String(transferEnd).padStart(6, "0")}`,
+          from_remaining_after: available - qty,
+          from_batch: {
+            range_start: fromBatch.range_start,
+            range_end: fromBatch.range_end,
+            current_position: fromBatch.current_position,
+            available,
+          },
+          to_batch: toBatch
+            ? {
+                range_start: toBatch.range_start,
+                range_end: toBatch.range_end,
+                current_position: toBatch.current_position,
+                available: toBatch.available,
+              }
+            : null,
+          contiguous_warning: contiguousWarning,
+          can_transfer: !contiguousWarning,
+        },
+      });
+    } catch (err) {
+      if (err.status)
+        return res
+          .status(err.status)
+          .json({ success: false, message: err.message });
+      next(err);
+    }
+  },
+);
+
+// POST /drive/stock/medal/add — tambah medal stock
+router.post(
+  "/stock/medal/add",
+  authorize("admin", "super_admin"),
+  validate(addMedalStockBody),
+  async (req, res, next) => {
+    try {
+      const { quantity, center_id } = req.body;
+      const centerId = resolveStockCenterId(req, center_id);
+
+      if (!centerId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "center_id is required" });
+      }
+
+      const data = await stockService.addMedalStock({
+        centerId,
+        quantity,
+        addedBy: req.user.id,
+      });
+
+      logger.info("Medal stock added via API", {
+        centerId,
+        quantity,
+        addedBy: req.user.id,
+      });
+
+      res.status(200).json({ success: true, data });
+    } catch (err) {
+      if (err.status)
+        return res
+          .status(err.status)
+          .json({ success: false, message: err.message });
+      next(err);
+    }
+  },
+);
+
+// POST /drive/stock/medal/transfer — transfer medal stock
+router.post(
+  "/stock/medal/transfer",
+  authorize("admin", "super_admin"),
+  validate(transferMedalStockBody),
+  async (req, res, next) => {
+    try {
+      const { from_center_id, to_center_id, quantity } = req.body;
+
+      const data = await stockService.transferMedalStock({
+        fromCenterId: from_center_id,
+        toCenterId: to_center_id,
+        quantity,
+        transferredBy: req.user.id,
+      });
+
+      logger.info("Medal stock transferred via API", {
         fromCenterId: from_center_id,
         toCenterId: to_center_id,
         quantity,
@@ -157,6 +385,7 @@ router.post(
   },
 );
 
+// PATCH /drive/stock/threshold — update low stock threshold
 router.patch(
   "/stock/threshold",
   authorize("admin", "super_admin"),
@@ -189,6 +418,10 @@ router.patch(
     }
   },
 );
+
+// ============================================================
+// CERTIFICATE SCAN UPLOAD
+// ============================================================
 
 router.post(
   "/certificates/:id/scan",
@@ -241,7 +474,6 @@ router.post(
         });
       }
 
-      // Hapus file lama jika ada (replace scan)
       if (cert.scan_file_id) {
         try {
           await driveService.deleteFile(cert.scan_file_id);
@@ -294,6 +526,10 @@ router.post(
     }
   },
 );
+
+// ============================================================
+// REPORT UPLOAD & DOWNLOAD
+// ============================================================
 
 router.post(
   "/reports/:id/upload",
@@ -368,7 +604,6 @@ router.post(
         [fileId, uploadedName, reportId],
       );
 
-      // [FIX] Auto-deactivate enrollment setelah manual upload report ke Drive
       await query(
         `UPDATE enrollments SET is_active = FALSE, updated_at = NOW() WHERE id = $1`,
         [report.enrollment_id],

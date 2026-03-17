@@ -3,14 +3,21 @@ const logger = require("../config/logger");
 const BATCH_MAX_SIZE = 100;
 
 const normalizeDbError = (err) => {
+  // Certificate batch errors
   if (
-    err.message?.includes("Insufficient certificate stock") ||
-    err.message?.includes("Stock sertifikat tidak mencukupi")
+    err.message?.includes("Certificate stock exhausted") ||
+    err.message?.includes("No certificate batch found")
   ) {
-    const normalized = new Error("Insufficient certificate stock");
+    const normalized = new Error(
+      err.message.includes("exhausted")
+        ? "Certificate stock exhausted for this center"
+        : "No certificate batch found for this center. Contact admin to add stock.",
+    );
     normalized.status = 400;
     return normalized;
   }
+
+  // Medal stock errors
   if (
     err.message?.includes("Insufficient medal stock") ||
     err.message?.includes("Stock medali tidak mencukupi")
@@ -19,6 +26,7 @@ const normalizeDbError = (err) => {
     normalized.status = 400;
     return normalized;
   }
+
   return err;
 };
 
@@ -57,21 +65,50 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
       throw err;
     }
 
+    // Cek certificate batch tersedia (sebelum insert)
+    // Lock batch row untuk prevent race condition
+    const batchCheck = await client.query(
+      `SELECT current_position, range_end
+       FROM certificate_stock_batches
+       WHERE center_id = $1
+       FOR UPDATE`,
+      [centerId],
+    );
+
+    if (batchCheck.rows.length === 0) {
+      const err = new Error(
+        "No certificate batch found for this center. Contact admin to add stock.",
+      );
+      err.status = 400;
+      throw err;
+    }
+
+    if (batchCheck.rows[0].current_position > batchCheck.rows[0].range_end) {
+      const err = new Error("Certificate stock exhausted for this center");
+      err.status = 400;
+      throw err;
+    }
+
+    // Kurangi medal stock
     try {
-      await client.query(`SELECT fn_decrement_certificate_stock($1, 1)`, [
-        centerId,
-      ]);
       await client.query(`SELECT fn_decrement_medal_stock($1, 1)`, [centerId]);
     } catch (err) {
       throw normalizeDbError(err);
     }
 
-    const certResult = await client.query(
-      `INSERT INTO certificates (enrollment_id, teacher_id, center_id, ptc_date, is_reprint)
-       VALUES ($1, $2, $3, $4, FALSE)
-       RETURNING id, cert_unique_id, enrollment_id, teacher_id, center_id, ptc_date, is_reprint, printed_at`,
-      [enrollmentId, teacherId, centerId, ptcDate],
-    );
+    // Insert certificate — cert_unique_id di-assign otomatis oleh trigger
+    // trigger fn_set_cert_unique_id -> fn_assign_cert_from_batch
+    let certResult;
+    try {
+      certResult = await client.query(
+        `INSERT INTO certificates (enrollment_id, teacher_id, center_id, ptc_date, is_reprint)
+         VALUES ($1, $2, $3, $4, FALSE)
+         RETURNING id, cert_unique_id, enrollment_id, teacher_id, center_id, ptc_date, is_reprint, printed_at`,
+        [enrollmentId, teacherId, centerId, ptcDate],
+      );
+    } catch (err) {
+      throw normalizeDbError(err);
+    }
 
     const cert = certResult.rows[0];
 
@@ -116,9 +153,7 @@ const printBatch = async ({ items, teacherId, centerId }) => {
   return withTransaction(async (client) => {
     const enrollmentIds = items.map((i) => i.enrollmentId);
 
-    // Lock the enrollment rows for the duration of this transaction so
-    // concurrent batch requests for the same enrollments are serialised
-    // rather than both passing the duplicate check simultaneously.
+    // Lock enrollment rows
     const enrollmentCheck = await client.query(
       `SELECT id FROM enrollments
        WHERE id = ANY($1)
@@ -152,17 +187,36 @@ const printBatch = async ({ items, teacherId, centerId }) => {
       throw err;
     }
 
-    // NOTE: we no longer do a separate alreadyPrintedMedal pre-check.
-    // The medals table has a unique index on enrollment_id (one medal per
-    // enrollment), so a concurrent insert will raise a 23505 unique violation
-    // which is caught below and surfaced as a 409.  This removes the TOCTOU
-    // race between the check and the insert.
+    // Lock & cek certificate batch
+    const batchCheck = await client.query(
+      `SELECT current_position, range_end
+       FROM certificate_stock_batches
+       WHERE center_id = $1
+       FOR UPDATE`,
+      [centerId],
+    );
 
+    if (batchCheck.rows.length === 0) {
+      const err = new Error(
+        "No certificate batch found for this center. Contact admin to add stock.",
+      );
+      err.status = 400;
+      throw err;
+    }
+
+    const available =
+      batchCheck.rows[0].range_end - batchCheck.rows[0].current_position + 1;
+
+    if (items.length > available) {
+      const err = new Error(
+        `Insufficient certificate stock. Available: ${available}, Requested: ${items.length}`,
+      );
+      err.status = 400;
+      throw err;
+    }
+
+    // Kurangi medal stock
     try {
-      await client.query(`SELECT fn_decrement_certificate_stock($1, $2)`, [
-        centerId,
-        items.length,
-      ]);
       await client.query(`SELECT fn_decrement_medal_stock($1, $2)`, [
         centerId,
         items.length,
@@ -176,28 +230,24 @@ const printBatch = async ({ items, teacherId, centerId }) => {
     );
     const batchId = batchIdResult.rows[0].batch_id;
 
-    const certPlaceholders = items
-      .map(
-        (_, i) =>
-          `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, FALSE, $${i * 5 + 5})`,
-      )
-      .join(", ");
+    // Insert certificates satu per satu agar trigger assign ID berurutan
+    const certs = [];
+    for (const item of items) {
+      let certResult;
+      try {
+        certResult = await client.query(
+          `INSERT INTO certificates (enrollment_id, teacher_id, center_id, ptc_date, is_reprint, batch_id)
+           VALUES ($1, $2, $3, $4, FALSE, $5)
+           RETURNING id, cert_unique_id, enrollment_id, teacher_id, center_id, ptc_date, is_reprint, batch_id, printed_at`,
+          [item.enrollmentId, teacherId, centerId, item.ptcDate, batchId],
+        );
+      } catch (err) {
+        throw normalizeDbError(err);
+      }
+      certs.push(certResult.rows[0]);
+    }
 
-    const certValues = items.flatMap((item) => [
-      item.enrollmentId,
-      teacherId,
-      centerId,
-      item.ptcDate,
-      batchId,
-    ]);
-
-    const certResult = await client.query(
-      `INSERT INTO certificates (enrollment_id, teacher_id, center_id, ptc_date, is_reprint, batch_id)
-       VALUES ${certPlaceholders}
-       RETURNING id, cert_unique_id, enrollment_id, teacher_id, center_id, ptc_date, is_reprint, batch_id, printed_at`,
-      certValues,
-    );
-
+    // Insert medals
     const medalPlaceholders = items
       .map(
         (_, i) =>
@@ -232,7 +282,6 @@ const printBatch = async ({ items, teacherId, centerId }) => {
       throw err;
     }
 
-    const certs = certResult.rows;
     const medals = medalResult.rows;
 
     logger.info("Batch certificate and medal printed", {
@@ -240,6 +289,7 @@ const printBatch = async ({ items, teacherId, centerId }) => {
       count: certs.length,
       teacherId,
       centerId,
+      certIds: certs.map((c) => c.cert_unique_id),
     });
 
     return { batchId, certs, medals };
@@ -273,20 +323,41 @@ const reprint = async ({ originalCertId, teacherId, centerId, ptcDate }) => {
 
     const { enrollment_id: enrollmentId } = original.rows[0];
 
+    // Lock & cek certificate batch untuk reprint
+    const batchCheck = await client.query(
+      `SELECT current_position, range_end
+       FROM certificate_stock_batches
+       WHERE center_id = $1
+       FOR UPDATE`,
+      [centerId],
+    );
+
+    if (batchCheck.rows.length === 0) {
+      const err = new Error(
+        "No certificate batch found for this center. Contact admin to add stock.",
+      );
+      err.status = 400;
+      throw err;
+    }
+
+    if (batchCheck.rows[0].current_position > batchCheck.rows[0].range_end) {
+      const err = new Error("Certificate stock exhausted for this center");
+      err.status = 400;
+      throw err;
+    }
+
+    // Insert reprint — cert_unique_id di-assign oleh trigger (ID baru dari batch)
+    let result;
     try {
-      await client.query(`SELECT fn_decrement_certificate_stock($1, 1)`, [
-        centerId,
-      ]);
+      result = await client.query(
+        `INSERT INTO certificates (enrollment_id, teacher_id, center_id, ptc_date, is_reprint, original_cert_id)
+         VALUES ($1, $2, $3, $4, TRUE, $5)
+         RETURNING id, cert_unique_id, enrollment_id, teacher_id, center_id, ptc_date, is_reprint, original_cert_id, printed_at`,
+        [enrollmentId, teacherId, centerId, ptcDate, originalCertId],
+      );
     } catch (err) {
       throw normalizeDbError(err);
     }
-
-    const result = await client.query(
-      `INSERT INTO certificates (enrollment_id, teacher_id, center_id, ptc_date, is_reprint, original_cert_id)
-       VALUES ($1, $2, $3, $4, TRUE, $5)
-       RETURNING id, cert_unique_id, enrollment_id, teacher_id, center_id, ptc_date, is_reprint, original_cert_id, printed_at`,
-      [enrollmentId, teacherId, centerId, ptcDate, originalCertId],
-    );
 
     const cert = result.rows[0];
     logger.info("Certificate reprinted", {

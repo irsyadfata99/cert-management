@@ -267,9 +267,6 @@ router.get(
   },
 );
 
-// ── GET /teacher/medals ──────────────────────────────────────
-// Returns the teacher's medal records directly from the medals table.
-// Used by HistoryPage so medal data reflects reality (not derived from certs).
 router.get("/medals", async (req, res, next) => {
   try {
     const { teacherId } = teacherContext(req);
@@ -754,24 +751,34 @@ router.patch(
   },
 );
 
+// ── [UPDATED] GET /teacher/stock ─────────────────────────────
+// Now queries certificate_stock_batches for accurate cert range info
 router.get("/stock", async (req, res, next) => {
   try {
     const { teacherId } = teacherContext(req);
 
     const result = await query(
       `SELECT
-         c.id    AS center_id,
-         c.name  AS center_name,
-         COALESCE(cs.quantity, 0)                           AS cert_quantity,
-         COALESCE(cs.low_stock_threshold, 10)               AS cert_threshold,
-         COALESCE(cs.quantity, 0) <= COALESCE(cs.low_stock_threshold, 10) AS cert_low_stock,
-         COALESCE(ms.quantity, 0)                           AS medal_quantity,
-         COALESCE(ms.low_stock_threshold, 10)               AS medal_threshold,
-         COALESCE(ms.quantity, 0) <= COALESCE(ms.low_stock_threshold, 10) AS medal_low_stock
+         c.id                                                              AS center_id,
+         c.name                                                            AS center_name,
+         -- Certificate batch info
+         b.range_start                                                     AS cert_range_start,
+         b.range_end                                                       AS cert_range_end,
+         b.current_position                                                AS cert_current_position,
+         COALESCE(b.range_end - b.current_position + 1, 0)                AS cert_quantity,
+         COALESCE(b.range_end - b.current_position + 1, 0)
+           <= COALESCE(cs.low_stock_threshold, 10)                        AS cert_low_stock,
+         COALESCE(cs.low_stock_threshold, 10)                             AS cert_threshold,
+         -- Medal info
+         COALESCE(ms.quantity, 0)                                          AS medal_quantity,
+         COALESCE(ms.low_stock_threshold, 10)                             AS medal_threshold,
+         COALESCE(ms.quantity, 0) <= COALESCE(ms.low_stock_threshold, 10) AS medal_low_stock,
+         tc.is_primary
        FROM teacher_centers tc
-       JOIN centers c              ON c.id = tc.center_id
-       JOIN certificate_stock cs   ON cs.center_id = c.id
-       JOIN medal_stock ms          ON ms.center_id = c.id
+       JOIN centers c                        ON c.id = tc.center_id
+       LEFT JOIN certificate_stock_batches b ON b.center_id = c.id
+       LEFT JOIN certificate_stock cs        ON cs.center_id = c.id
+       LEFT JOIN medal_stock ms              ON ms.center_id = c.id
        WHERE tc.teacher_id = $1
          AND c.is_active = TRUE
        ORDER BY tc.is_primary DESC, c.name`,

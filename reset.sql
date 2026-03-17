@@ -2,6 +2,8 @@
 DELETE FROM reports;
 DELETE FROM medals;
 DELETE FROM certificates;
+DELETE FROM centers;
+DELETE FROM teachers;
 
 -- Hapus enrollments dan students
 DELETE FROM enrollments;

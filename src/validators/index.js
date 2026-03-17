@@ -55,7 +55,6 @@ const listAdminsQuery = paginationQuery.extend({
 
 const monitoringUploadQuery = paginationQuery.extend({
   center_id: z.string().regex(/^\d+$/).optional(),
-  // Values must match vw_teacher_upload_status.upload_status column
   status: z
     .enum([
       "not_started",
@@ -177,10 +176,6 @@ const listEnrollmentsQuery = paginationQuery.extend({
   teacher_id: z.string().regex(/^\d+$/).optional(),
   module_id: z.string().regex(/^\d+$/).optional(),
   search: z.string().max(100).optional(),
-  // Values must match the CASE expression in vw_enrollment_status:
-  //   'pending' | 'cert_printed' | 'scan_uploaded' | 'report_uploaded' | 'complete'
-  // NOTE: 'report_drafted' is a vw_teacher_upload_status value, NOT vw_enrollment_status.
-  // The correct value here is 'report_uploaded' (drive_file_id IS NOT NULL check in view).
   enrollment_status: z
     .enum([
       "pending",
@@ -255,21 +250,53 @@ const updateReportBody = z
     message: "At least one field must be provided",
   });
 
-const addStockBody = z.object({
+// ── Stock Validators (Updated) ────────────────────────────────
+
+// Add certificate batch: input range_start & range_end
+const addCertificateBatchBody = z
+  .object({
+    center_id: z.number().int().positive().optional(),
+    range_start: z
+      .number({ required_error: "range_start is required" })
+      .int()
+      .positive("range_start must be a positive integer"),
+    range_end: z
+      .number({ required_error: "range_end is required" })
+      .int()
+      .positive("range_end must be a positive integer"),
+  })
+  .refine((d) => d.range_start <= d.range_end, {
+    message: "range_start must be <= range_end",
+    path: ["range_start"],
+  });
+
+// Transfer certificate batch: input quantity
+const transferCertificateBatchBody = z.object({
+  from_center_id: z
+    .number({ required_error: "from_center_id is required" })
+    .int()
+    .positive(),
+  to_center_id: z
+    .number({ required_error: "to_center_id is required" })
+    .int()
+    .positive(),
+  quantity: z
+    .number({ required_error: "quantity is required" })
+    .int()
+    .positive("quantity must be a positive integer"),
+});
+
+// Add medal stock: input quantity
+const addMedalStockBody = z.object({
   center_id: z.number().int().positive().optional(),
-  type: z.enum(["certificate", "medal"], {
-    required_error: "type is required",
-  }),
   quantity: z
     .number({ required_error: "quantity is required" })
     .int()
     .positive("Quantity must be positive"),
 });
 
-const transferStockBody = z.object({
-  type: z.enum(["certificate", "medal"], {
-    required_error: "type is required",
-  }),
+// Transfer medal stock
+const transferMedalStockBody = z.object({
   from_center_id: z
     .number({ required_error: "from_center_id is required" })
     .int()
@@ -293,6 +320,36 @@ const updateThresholdBody = z.object({
     .number({ required_error: "threshold is required" })
     .int()
     .min(0, "Threshold must be >= 0"),
+});
+
+// Keep old addStockBody & transferStockBody for backward compat (medal only now)
+const addStockBody = z.object({
+  center_id: z.number().int().positive().optional(),
+  type: z.enum(["medal"], {
+    required_error: "type is required",
+  }),
+  quantity: z
+    .number({ required_error: "quantity is required" })
+    .int()
+    .positive("Quantity must be positive"),
+});
+
+const transferStockBody = z.object({
+  type: z.enum(["medal"], {
+    required_error: "type is required",
+  }),
+  from_center_id: z
+    .number({ required_error: "from_center_id is required" })
+    .int()
+    .positive(),
+  to_center_id: z
+    .number({ required_error: "to_center_id is required" })
+    .int()
+    .positive(),
+  quantity: z
+    .number({ required_error: "quantity is required" })
+    .int()
+    .positive(),
 });
 
 const validate = (schema, target = "body") => {
@@ -347,6 +404,13 @@ module.exports = {
   listCertsQuery,
   createReportBody,
   updateReportBody,
+  // Stock - Certificate Batch
+  addCertificateBatchBody,
+  transferCertificateBatchBody,
+  // Stock - Medal
+  addMedalStockBody,
+  transferMedalStockBody,
+  // Stock - General
   addStockBody,
   transferStockBody,
   updateThresholdBody,
