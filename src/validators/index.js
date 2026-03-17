@@ -115,19 +115,31 @@ const listStudentsQuery = paginationQuery.extend({
   center_id: z.string().regex(/^\d+$/).optional(),
 });
 
+// ── Module Validators (Updated) ───────────────────────────────
+
 const createModuleBody = z.object({
+  code: z.string().min(1, "Module code is required").max(100),
   name: z.string().min(1, "Module name is required").max(255),
   description: z.string().max(1000).optional(),
 });
 
 const updateModuleBody = z
   .object({
+    code: z.string().min(1).max(100).optional(),
     name: z.string().min(1).max(255).optional(),
     description: z.string().max(1000).nullable().optional(),
   })
-  .refine((d) => d.name !== undefined || d.description !== undefined, {
-    message: "At least one field must be provided",
-  });
+  .refine(
+    (d) =>
+      d.code !== undefined ||
+      d.name !== undefined ||
+      d.description !== undefined,
+    {
+      message: "At least one field must be provided",
+    },
+  );
+
+// ── Teacher Validators ────────────────────────────────────────
 
 const createTeacherBody = z.object({
   email: z.string().email("Invalid email format").max(255),
@@ -250,9 +262,8 @@ const updateReportBody = z
     message: "At least one field must be provided",
   });
 
-// ── Stock Validators (Updated) ────────────────────────────────
+// ── Stock Validators ──────────────────────────────────────────
 
-// Add certificate batch: input range_start & range_end
 const addCertificateBatchBody = z
   .object({
     center_id: z.number().int().positive().optional(),
@@ -270,7 +281,6 @@ const addCertificateBatchBody = z
     path: ["range_start"],
   });
 
-// Transfer certificate batch: input quantity
 const transferCertificateBatchBody = z.object({
   from_center_id: z
     .number({ required_error: "from_center_id is required" })
@@ -286,7 +296,6 @@ const transferCertificateBatchBody = z.object({
     .positive("quantity must be a positive integer"),
 });
 
-// Add medal stock: input quantity
 const addMedalStockBody = z.object({
   center_id: z.number().int().positive().optional(),
   quantity: z
@@ -295,7 +304,6 @@ const addMedalStockBody = z.object({
     .positive("Quantity must be positive"),
 });
 
-// Transfer medal stock
 const transferMedalStockBody = z.object({
   from_center_id: z
     .number({ required_error: "from_center_id is required" })
@@ -322,7 +330,6 @@ const updateThresholdBody = z.object({
     .min(0, "Threshold must be >= 0"),
 });
 
-// Keep old addStockBody & transferStockBody for backward compat (medal only now)
 const addStockBody = z.object({
   center_id: z.number().int().positive().optional(),
   type: z.enum(["medal"], {
@@ -351,6 +358,8 @@ const transferStockBody = z.object({
     .int()
     .positive(),
 });
+
+// ── Validate Middleware ───────────────────────────────────────
 
 const validate = (schema, target = "body") => {
   return (req, res, next) => {

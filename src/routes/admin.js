@@ -1,4 +1,6 @@
 const express = require("express");
+const multer = require("multer");
+const ExcelJS = require("exceljs");
 const { authorize } = require("../middleware/authorize");
 const { apiLimiter } = require("../middleware/rateLimiter");
 const { parsePagination, paginateResponse } = require("../helpers/paginate");
@@ -32,10 +34,204 @@ const router = express.Router();
 router.use(authorize("admin", "super_admin"));
 router.use(apiLimiter);
 
+// ── Multer for Excel import ───────────────────────────────────
+const xlsxUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = [
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+    ];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only Excel files (.xlsx, .xls) are allowed"));
+    }
+  },
+});
+
+const handleXlsxUpload = (req, res, next) => {
+  xlsxUpload.single("file")(req, res, (err) => {
+    if (
+      err instanceof multer.MulterError ||
+      err?.message?.includes("Only Excel")
+    ) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
+    if (err) return next(err);
+    next();
+  });
+};
+
 const resolveCenterId = (req, paramCenterId) => {
   if (paramCenterId) return parseInt(paramCenterId);
   return undefined;
 };
+
+// ============================================================
+// STUDENTS
+// ============================================================
+
+// IMPORTANT: /students/template and /students/import must be defined
+// BEFORE /students/:id to prevent Express matching them as :id param.
+
+// GET /admin/students/template
+router.get("/students/template", async (req, res, next) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Students");
+
+    sheet.columns = [
+      { header: "name", key: "name", width: 35 },
+      { header: "center", key: "center", width: 30 },
+    ];
+
+    const headerRow = sheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE2EAFF" },
+    };
+    headerRow.alignment = { vertical: "middle" };
+
+    sheet.addRow({ name: "THALIA EDELINE KODIAT", center: "Sunda" });
+    sheet.addRow({ name: "BUDI SANTOSO", center: "Sunda" });
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=students_template.xlsx",
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /admin/students/import
+router.post("/students/import", handleXlsxUpload, async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No file uploaded" });
+    }
+
+    const MAX_ROWS = 20;
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+    const sheet = workbook.worksheets[0];
+
+    if (!sheet) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No worksheet found in file" });
+    }
+
+    const rows = [];
+    sheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const name = row.getCell(1).value?.toString().trim().toUpperCase();
+      const centerName = row.getCell(2).value?.toString().trim();
+      if (name && centerName) rows.push({ name, centerName });
+    });
+
+    if (rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "No valid data found in file. Make sure columns are name and center.",
+      });
+    }
+
+    if (rows.length > MAX_ROWS) {
+      return res.status(400).json({
+        success: false,
+        message: `Maximum ${MAX_ROWS} rows allowed per import. File contains ${rows.length} data rows.`,
+      });
+    }
+
+    const imported = [];
+    const skipped = [];
+
+    for (const row of rows) {
+      // Lookup center by name (case-insensitive)
+      const centerResult = await query(
+        `SELECT id, name FROM centers
+         WHERE UPPER(name) = UPPER($1) AND is_active = TRUE`,
+        [row.centerName],
+      );
+
+      if (centerResult.rows.length === 0) {
+        skipped.push({
+          ...row,
+          reason: `Center "${row.centerName}" not found or inactive`,
+        });
+        continue;
+      }
+
+      const centerId = centerResult.rows[0].id;
+      const centerName = centerResult.rows[0].name;
+
+      // Check duplicate: same name + same center (active only)
+      const dupCheck = await query(
+        `SELECT id FROM students
+         WHERE UPPER(name) = $1 AND center_id = $2 AND is_active = TRUE`,
+        [row.name, centerId],
+      );
+
+      if (dupCheck.rows.length > 0) {
+        skipped.push({
+          ...row,
+          reason: "Student with same name already exists in this center",
+        });
+        continue;
+      }
+
+      const result = await query(
+        `INSERT INTO students (name, center_id)
+         VALUES ($1, $2)
+         RETURNING id, name, center_id, is_active, created_at`,
+        [row.name, centerId],
+      );
+
+      imported.push({
+        ...result.rows[0],
+        center_name: centerName,
+      });
+    }
+
+    logger.info("Students imported via Excel", {
+      total: rows.length,
+      imported: imported.length,
+      skipped: skipped.length,
+      importedBy: req.user.id,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        imported,
+        skipped,
+        summary: {
+          total: rows.length,
+          imported: imported.length,
+          skipped: skipped.length,
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.get(
   "/students",
@@ -275,6 +471,10 @@ router.patch(
   },
 );
 
+// ============================================================
+// CENTERS
+// ============================================================
+
 router.get(
   "/centers",
   validate(paginationQuery, "query"),
@@ -327,8 +527,8 @@ router.get(
   },
 );
 
-// ── [UPDATED] /admin/stock — now queries vw_stock_alerts which
-// includes certificate batch data (range_start, range_end, current_position)
+// ── Stock ─────────────────────────────────────────────────────
+
 router.get("/stock", async (req, res, next) => {
   try {
     const result = await query(
@@ -350,6 +550,150 @@ router.get("/stock", async (req, res, next) => {
     );
 
     res.status(200).json({ success: true, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ============================================================
+// MODULES
+// ============================================================
+
+// IMPORTANT: /modules/template and /modules/import must be defined
+// BEFORE /modules/:id to prevent Express matching them as :id param.
+
+router.get("/modules/template", async (req, res, next) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Modules");
+
+    sheet.columns = [
+      { header: "module_code", key: "code", width: 20 },
+      { header: "module_name", key: "name", width: 40 },
+    ];
+
+    const headerRow = sheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE2EAFF" },
+    };
+    headerRow.alignment = { vertical: "middle" };
+
+    sheet.addRow({ code: "SCR-001", name: "SCRATCH BEGINNER" });
+    sheet.addRow({ code: "PY-ADV", name: "PYTHON ADVANCED" });
+    sheet.addRow({ code: "RBX-001", name: "2D GAMES WITH ROBLOX" });
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=modules_template.xlsx",
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/modules/import", handleXlsxUpload, async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No file uploaded" });
+    }
+
+    const MAX_ROWS = 20;
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+    const sheet = workbook.worksheets[0];
+
+    if (!sheet) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No worksheet found in file" });
+    }
+
+    const rows = [];
+    sheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const code = row.getCell(1).value?.toString().trim().toUpperCase();
+      const name = row.getCell(2).value?.toString().trim().toUpperCase();
+      if (code && name) rows.push({ code, name });
+    });
+
+    if (rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "No valid data found in file. Make sure columns are module_code and module_name.",
+      });
+    }
+
+    if (rows.length > MAX_ROWS) {
+      return res.status(400).json({
+        success: false,
+        message: `Maximum ${MAX_ROWS} rows allowed per import. File contains ${rows.length} data rows.`,
+      });
+    }
+
+    const imported = [];
+    const skipped = [];
+
+    for (const row of rows) {
+      const dupCode = await query(
+        `SELECT id FROM modules WHERE UPPER(code) = $1`,
+        [row.code],
+      );
+      if (dupCode.rows.length > 0) {
+        skipped.push({ ...row, reason: "Module code already exists" });
+        continue;
+      }
+
+      const dupName = await query(
+        `SELECT id FROM modules WHERE UPPER(name) = $1`,
+        [row.name],
+      );
+      if (dupName.rows.length > 0) {
+        skipped.push({ ...row, reason: "Module name already exists" });
+        continue;
+      }
+
+      const result = await query(
+        `INSERT INTO modules (code, name)
+         VALUES ($1, $2)
+         RETURNING id, code, name, is_active, created_at`,
+        [row.code, row.name],
+      );
+      imported.push(result.rows[0]);
+    }
+
+    logger.info("Modules imported via Excel", {
+      total: rows.length,
+      imported: imported.length,
+      skipped: skipped.length,
+      importedBy: req.user.id,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        imported,
+        skipped,
+        summary: {
+          total: rows.length,
+          imported: imported.length,
+          skipped: skipped.length,
+        },
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -380,13 +724,13 @@ router.get(
       const orderBy = buildOrderBy(
         req.query.sort_by,
         req.query.sort_order,
-        ["name", "created_at"],
+        ["code", "name", "created_at"],
         "name",
       );
 
       const [dataResult, countResult] = await Promise.all([
         query(
-          `SELECT id, name, description, is_active, created_at, updated_at
+          `SELECT id, code, name, description, is_active, created_at, updated_at
          FROM modules ${whereClause} ${orderBy}
          LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
           [...values, limit, offset],
@@ -414,17 +758,38 @@ router.get(
 
 router.post("/modules", validate(createModuleBody), async (req, res, next) => {
   try {
-    const { name, description } = req.body;
+    const { code, name, description } = req.body;
+
+    const dupCode = await query(
+      `SELECT id FROM modules WHERE UPPER(code) = UPPER($1)`,
+      [code],
+    );
+    if (dupCode.rows.length > 0) {
+      return res
+        .status(409)
+        .json({ success: false, message: "Module code already exists" });
+    }
+
+    const dupName = await query(
+      `SELECT id FROM modules WHERE UPPER(name) = UPPER($1)`,
+      [name],
+    );
+    if (dupName.rows.length > 0) {
+      return res
+        .status(409)
+        .json({ success: false, message: "Module name already exists" });
+    }
 
     const result = await query(
-      `INSERT INTO modules (name, description)
-       VALUES ($1, $2)
-       RETURNING id, name, description, is_active, created_at`,
-      [name, description ?? null],
+      `INSERT INTO modules (code, name, description)
+       VALUES ($1, $2, $3)
+       RETURNING id, code, name, description, is_active, created_at`,
+      [code.toUpperCase(), name.toUpperCase(), description ?? null],
     );
 
     logger.info("Module created", {
       moduleId: result.rows[0].id,
+      code,
       name,
       createdBy: req.user.id,
     });
@@ -440,18 +805,43 @@ router.patch(
   validate(updateModuleBody),
   async (req, res, next) => {
     try {
-      const { name, description } = req.body;
+      const { code, name, description } = req.body;
+
+      if (code !== undefined) {
+        const dupCode = await query(
+          `SELECT id FROM modules WHERE UPPER(code) = UPPER($1) AND id != $2`,
+          [code, req.params.id],
+        );
+        if (dupCode.rows.length > 0) {
+          return res
+            .status(409)
+            .json({ success: false, message: "Module code already exists" });
+        }
+      }
+
+      if (name !== undefined) {
+        const dupName = await query(
+          `SELECT id FROM modules WHERE UPPER(name) = UPPER($1) AND id != $2`,
+          [name, req.params.id],
+        );
+        if (dupName.rows.length > 0) {
+          return res
+            .status(409)
+            .json({ success: false, message: "Module name already exists" });
+        }
+      }
 
       const fields = {};
-      if (name) fields.name = name;
+      if (code !== undefined) fields.code = code.toUpperCase();
+      if (name !== undefined) fields.name = name.toUpperCase();
       if (description !== undefined) fields.description = description ?? null;
 
       const { setClause, values, nextIndex } = buildSet(fields);
 
       const result = await query(
         `UPDATE modules ${setClause}
-       WHERE id = $${nextIndex} AND is_active = TRUE
-       RETURNING id, name, description, is_active, updated_at`,
+         WHERE id = $${nextIndex} AND is_active = TRUE
+         RETURNING id, code, name, description, is_active, updated_at`,
         [...values, req.params.id],
       );
 
@@ -504,6 +894,185 @@ router.patch(
     }
   },
 );
+
+// ============================================================
+// TEACHERS
+// ============================================================
+
+// IMPORTANT: /teachers/template and /teachers/import must be defined
+// BEFORE /teachers/:id to prevent Express matching them as :id param.
+
+// GET /admin/teachers/template
+router.get("/teachers/template", async (req, res, next) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Teachers");
+
+    sheet.columns = [
+      { header: "email", key: "email", width: 35 },
+      { header: "center", key: "center", width: 30 },
+    ];
+
+    const headerRow = sheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE2EAFF" },
+    };
+    headerRow.alignment = { vertical: "middle" };
+
+    sheet.addRow({ email: "ady@kodingnext.com", center: "Sunda" });
+    sheet.addRow({ email: "kevin.renaldo@kodingnext.com", center: "Sunda" });
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=teachers_template.xlsx",
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /admin/teachers/import
+router.post("/teachers/import", handleXlsxUpload, async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No file uploaded" });
+    }
+
+    const MAX_ROWS = 20;
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+    const sheet = workbook.worksheets[0];
+
+    if (!sheet) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No worksheet found in file" });
+    }
+
+    const rows = [];
+    sheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const email = row.getCell(1).value?.toString().trim().toLowerCase();
+      const centerName = row.getCell(2).value?.toString().trim() ?? null;
+      if (email) rows.push({ email, centerName });
+    });
+
+    if (rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "No valid data found in file. Make sure columns are email and center.",
+      });
+    }
+
+    if (rows.length > MAX_ROWS) {
+      return res.status(400).json({
+        success: false,
+        message: `Maximum ${MAX_ROWS} rows allowed per import. File contains ${rows.length} data rows.`,
+      });
+    }
+
+    const imported = [];
+    const skipped = [];
+
+    for (const row of rows) {
+      // Check duplicate email
+      const dupEmail = await query(`SELECT id FROM users WHERE email = $1`, [
+        row.email,
+      ]);
+      if (dupEmail.rows.length > 0) {
+        skipped.push({ ...row, reason: "Email already registered" });
+        continue;
+      }
+
+      // Lookup center if provided
+      let centerId = null;
+      let centerName = null;
+
+      if (row.centerName) {
+        const centerResult = await query(
+          `SELECT id, name FROM centers
+           WHERE UPPER(name) = UPPER($1) AND is_active = TRUE`,
+          [row.centerName],
+        );
+
+        if (centerResult.rows.length === 0) {
+          skipped.push({
+            ...row,
+            reason: `Center "${row.centerName}" not found or inactive`,
+          });
+          continue;
+        }
+
+        centerId = centerResult.rows[0].id;
+        centerName = centerResult.rows[0].name;
+      }
+
+      // Insert teacher + assign center in transaction
+      const result = await withTransaction(async (client) => {
+        const userResult = await client.query(
+          `INSERT INTO users (email, name, role, center_id, is_active)
+           VALUES ($1, $2, 'teacher', $3, FALSE)
+           RETURNING id, email, name, role, center_id, is_active, created_at`,
+          [row.email, row.email, centerId],
+        );
+
+        const teacher = userResult.rows[0];
+
+        if (centerId) {
+          await client.query(
+            `INSERT INTO teacher_centers (teacher_id, center_id, is_primary)
+             VALUES ($1, $2, TRUE)
+             ON CONFLICT (teacher_id, center_id) DO NOTHING`,
+            [teacher.id, centerId],
+          );
+        }
+
+        return teacher;
+      });
+
+      imported.push({
+        ...result,
+        center_name: centerName,
+      });
+    }
+
+    logger.info("Teachers imported via Excel", {
+      total: rows.length,
+      imported: imported.length,
+      skipped: skipped.length,
+      importedBy: req.user.id,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        imported,
+        skipped,
+        summary: {
+          total: rows.length,
+          imported: imported.length,
+          skipped: skipped.length,
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.get(
   "/teachers",
@@ -1027,6 +1596,10 @@ router.patch(
     }
   },
 );
+
+// ============================================================
+// ENROLLMENTS
+// ============================================================
 
 router.get(
   "/enrollments",
