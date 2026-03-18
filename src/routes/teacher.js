@@ -49,11 +49,18 @@ router.get("/enrollments", async (req, res, next) => {
     const { teacherId } = teacherContext(req);
     const { page, limit, offset } = parsePagination(req.query);
 
+    // include_inactive=true → return enrollments regardless of is_active
+    // Used by PrintPage reprint mode to show completed enrollments
+    const includeInactive = req.query.include_inactive === "true";
+
+    const activeCondition = includeInactive ? "" : "AND e.is_active = TRUE";
+
     const [dataResult, countResult] = await Promise.all([
       query(
         `SELECT
            e.id AS enrollment_id,
            e.center_id,
+           e.is_active,
            s.name AS student_name,
            m.name AS module_name,
            c.name AS center_name,
@@ -69,7 +76,7 @@ router.get("/enrollments", async (req, res, next) => {
          JOIN centers c   ON c.id = e.center_id
          JOIN vw_enrollment_status es ON es.enrollment_id = e.id
          WHERE e.teacher_id = $1
-           AND e.is_active = TRUE
+           ${activeCondition}
            AND EXISTS (
              SELECT 1 FROM teacher_centers tc
              WHERE tc.teacher_id = $1 AND tc.center_id = e.center_id
@@ -82,7 +89,7 @@ router.get("/enrollments", async (req, res, next) => {
         `SELECT COUNT(*)::int AS total
          FROM enrollments e
          WHERE e.teacher_id = $1
-           AND e.is_active = TRUE
+           ${activeCondition}
            AND EXISTS (
              SELECT 1 FROM teacher_centers tc
              WHERE tc.teacher_id = $1 AND tc.center_id = e.center_id
@@ -751,8 +758,6 @@ router.patch(
   },
 );
 
-// ── [UPDATED] GET /teacher/stock ─────────────────────────────
-// Now queries certificate_stock_batches for accurate cert range info
 router.get("/stock", async (req, res, next) => {
   try {
     const { teacherId } = teacherContext(req);
@@ -761,7 +766,6 @@ router.get("/stock", async (req, res, next) => {
       `SELECT
          c.id                                                              AS center_id,
          c.name                                                            AS center_name,
-         -- Certificate batch info
          b.range_start                                                     AS cert_range_start,
          b.range_end                                                       AS cert_range_end,
          b.current_position                                                AS cert_current_position,
@@ -769,7 +773,6 @@ router.get("/stock", async (req, res, next) => {
          COALESCE(b.range_end - b.current_position + 1, 0)
            <= COALESCE(cs.low_stock_threshold, 10)                        AS cert_low_stock,
          COALESCE(cs.low_stock_threshold, 10)                             AS cert_threshold,
-         -- Medal info
          COALESCE(ms.quantity, 0)                                          AS medal_quantity,
          COALESCE(ms.low_stock_threshold, 10)                             AS medal_threshold,
          COALESCE(ms.quantity, 0) <= COALESCE(ms.low_stock_threshold, 10) AS medal_low_stock,

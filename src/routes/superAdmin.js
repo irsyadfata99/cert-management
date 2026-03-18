@@ -481,17 +481,44 @@ router.get(
 
       const [dataResult, countResult] = await Promise.all([
         query(
-          `SELECT vu.teacher_id, vu.teacher_name, vu.teacher_email,
-                vu.center_id, vu.center_name, vu.enrollment_id,
-                vu.student_name, vu.module_name,
-                vu.scan_file_id, vu.scan_uploaded_at,
-                vu.report_id, vu.report_drive_file_id,
-                vu.report_uploaded_at, vu.upload_status
-         FROM vw_teacher_upload_status vu
-         JOIN enrollments e ON e.id = vu.enrollment_id
-         ${whereClause}
-         ORDER BY vu.upload_status, vu.teacher_name
-         LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+          `SELECT
+             vu.teacher_id,
+             vu.teacher_name,
+             vu.teacher_email,
+             vu.center_id,
+             vu.center_name,
+             vu.enrollment_id,
+             vu.student_name,
+             vu.module_name,
+             vu.scan_file_id,
+             vu.scan_uploaded_at,
+             vu.report_id,
+             vu.report_drive_file_id,
+             vu.report_uploaded_at,
+             vu.upload_status,
+             u.drive_folder_id                               AS teacher_drive_folder_id,
+             -- Original (non-reprint) cert ID
+             (
+               SELECT c2.cert_unique_id
+               FROM certificates c2
+               WHERE c2.enrollment_id = vu.enrollment_id
+                 AND c2.is_reprint = FALSE
+               ORDER BY c2.printed_at ASC
+               LIMIT 1
+             )                                               AS print_cert_id,
+             -- Reprint cert IDs, comma-separated
+             (
+               SELECT STRING_AGG(c3.cert_unique_id, ', ' ORDER BY c3.printed_at ASC)
+               FROM certificates c3
+               WHERE c3.enrollment_id = vu.enrollment_id
+                 AND c3.is_reprint = TRUE
+             )                                               AS reprint_cert_ids
+           FROM vw_teacher_upload_status vu
+           JOIN enrollments e ON e.id = vu.enrollment_id
+           JOIN users u ON u.id = vu.teacher_id
+           ${whereClause}
+           ORDER BY vu.upload_status, vu.teacher_name
+           LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
           [...values, limit, offset],
         ),
         query(
@@ -566,8 +593,6 @@ router.get("/monitoring/stock-alerts", async (req, res, next) => {
   }
 });
 
-// ── [NEW] GET /super-admin/monitoring/reprints ────────────────
-// Reprint log: siapa yang reprint, atas nama student siapa
 router.get(
   "/monitoring/reprints",
   validate(monitoringReprintsQuery, "query"),
@@ -596,7 +621,6 @@ router.get(
 
       const { whereClause, values } = buildWhere(filters);
 
-      // Tambahkan is_reprint = TRUE ke WHERE
       const reprintWhere = whereClause
         ? `${whereClause} AND c.is_reprint = TRUE`
         : `WHERE c.is_reprint = TRUE`;
@@ -608,18 +632,14 @@ router.get(
              c.cert_unique_id      AS reprint_cert_unique_id,
              c.printed_at          AS reprinted_at,
              c.ptc_date,
-             -- Teacher yang melakukan reprint
              u.id                  AS teacher_id,
              u.name                AS teacher_name,
              u.email               AS teacher_email,
-             -- Student atas nama siapa reprint dilakukan
+             u.drive_folder_id     AS teacher_drive_folder_id,
              s.name                AS student_name,
-             -- Module
              m.name                AS module_name,
-             -- Center
              cn.id                 AS center_id,
              cn.name               AS center_name,
-             -- Original certificate
              oc.id                 AS original_cert_id,
              oc.cert_unique_id     AS original_cert_unique_id,
              oc.printed_at         AS original_printed_at

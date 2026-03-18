@@ -167,7 +167,6 @@ router.post(
     try {
       const { from_center_id, to_center_id, quantity } = req.body;
 
-      // Preview transfer range sebelum eksekusi (untuk konfirmasi di frontend)
       const fromBatch = await stockService.getCertificateBatch(from_center_id);
 
       if (!fromBatch) {
@@ -217,7 +216,7 @@ router.post(
   },
 );
 
-// GET /drive/stock/certificate/transfer/preview — preview range sebelum transfer
+// GET /drive/stock/certificate/transfer/preview
 router.get(
   "/stock/certificate/transfer/preview",
   authorize("admin", "super_admin"),
@@ -267,7 +266,6 @@ router.get(
       const transferStart = fromBatch.range_end - qty + 1;
       const transferEnd = fromBatch.range_end;
 
-      // Cek apakah contiguous dengan destination batch yang ada
       let contiguousWarning = null;
       if (toBatch && transferStart !== toBatch.range_end + 1) {
         contiguousWarning = `Transfer range (CERT-${String(transferStart).padStart(6, "0")}) is not contiguous with destination batch end (CERT-${String(toBatch.range_end).padStart(6, "0")}). Transfer will be rejected.`;
@@ -312,7 +310,7 @@ router.get(
   },
 );
 
-// POST /drive/stock/medal/add — tambah medal stock
+// POST /drive/stock/medal/add
 router.post(
   "/stock/medal/add",
   authorize("admin", "super_admin"),
@@ -351,7 +349,7 @@ router.post(
   },
 );
 
-// POST /drive/stock/medal/transfer — transfer medal stock
+// POST /drive/stock/medal/transfer
 router.post(
   "/stock/medal/transfer",
   authorize("admin", "super_admin"),
@@ -385,7 +383,7 @@ router.post(
   },
 );
 
-// PATCH /drive/stock/threshold — update low stock threshold
+// PATCH /drive/stock/threshold
 router.patch(
   "/stock/threshold",
   authorize("admin", "super_admin"),
@@ -445,6 +443,9 @@ router.post(
       const certId = parseInt(req.params.id);
       const teacherId = req.user.id;
 
+      // is_reprint flag sent from frontend as form field
+      const isReprint = req.body.is_reprint === "true";
+
       const certCheck = await query(
         `SELECT c.id, c.scan_file_id, c.enrollment_id,
                 s.name AS student_name,
@@ -494,7 +495,12 @@ router.post(
         .replace(/[^a-zA-Z0-9]/g, "-")
         .replace(/-+/g, "-");
       const ext = req.file.originalname.split(".").pop() || "jpg";
-      const fileName = `${today}_${safeName}_${safeModule}.${ext}`;
+
+      // Append _REPRINT suffix before extension if this is a reprint scan
+      const baseName = isReprint
+        ? `${today}_${safeName}_${safeModule}_REPRINT`
+        : `${today}_${safeName}_${safeModule}`;
+      const fileName = `${baseName}.${ext}`;
 
       const { fileId, fileName: uploadedName } = await driveService.uploadFile({
         buffer: req.file.buffer,
@@ -510,7 +516,12 @@ router.post(
         [fileId, uploadedName, certId],
       );
 
-      logger.info("Certificate scan uploaded", { certId, fileId, teacherId });
+      logger.info("Certificate scan uploaded", {
+        certId,
+        fileId,
+        teacherId,
+        isReprint,
+      });
 
       res.status(200).json({
         success: true,
