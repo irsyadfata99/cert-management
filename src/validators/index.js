@@ -115,7 +115,7 @@ const listStudentsQuery = paginationQuery.extend({
   center_id: z.string().regex(/^\d+$/).optional(),
 });
 
-// ── Module Validators (Updated) ───────────────────────────────
+// ── Module Validators ─────────────────────────────────────────
 
 const createModuleBody = z.object({
   code: z.string().min(1, "Module code is required").max(100),
@@ -232,12 +232,22 @@ const listCertsQuery = paginationQuery.extend({
   is_reprint: z.enum(["true", "false"]).optional(),
 });
 
+// ── Report Validators ─────────────────────────────────────────
+
+// Create report — supports both draft (is_draft: true) and final submission
+// When is_draft is true:
+//   - content can be empty or short (word count not enforced here, enforced in route)
+//   - all score fields are optional
+// When is_draft is false (default):
+//   - content is required
+//   - word count minimum enforced in route handler
 const createReportBody = z.object({
   enrollment_id: z
     .number({ required_error: "enrollment_id is required" })
     .int()
     .positive(),
-  content: z.string().min(1, "Content is required"),
+  is_draft: z.boolean().optional().default(true),
+  content: z.string().optional().default(""),
   academic_year: z.string().max(20).optional(),
   period: z.string().max(100).optional(),
   score_creativity: scoreEnum,
@@ -247,9 +257,12 @@ const createReportBody = z.object({
   score_coding_skills: scoreEnum,
 });
 
+// Update report — same draft logic
+// When is_draft: false is passed, it triggers Drive upload in route handler
 const updateReportBody = z
   .object({
-    content: z.string().min(1).optional(),
+    is_draft: z.boolean().optional(),
+    content: z.string().optional(),
     academic_year: z.string().max(20).optional(),
     period: z.string().max(100).optional(),
     score_creativity: scoreEnum,

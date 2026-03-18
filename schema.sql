@@ -1,6 +1,6 @@
 -- ============================================================
 -- SCHEMA: Certificate & Medal Management System
--- Version: 4.0
+-- Version: 5.0
 -- Changelog:
 --   v3.0 - Tambah teacher_centers untuk multi-center support
 --   v3.1 - Fix vw_enrollment_status & vw_teacher_upload_status
@@ -12,6 +12,14 @@
 --          trg_certificates_unique_id (lama), vw_stock_alerts (lama);
 --          integrasikan certificate_stock_batches sebagai satu-satunya
 --          mekanisme stock sertifikat; rapikan urutan objek
+--   v5.0 - Draft report support:
+--          - Hapus CONSTRAINT chk_word_count_min (pindah ke app layer)
+--          - content TEXT nullable untuk draft
+--          - Tambah kolom is_draft BOOLEAN NOT NULL DEFAULT TRUE
+--          - Fix vw_enrollment_status: bedakan draft vs complete report
+--          - Fix vw_teacher_upload_status: report_drafted hanya jika
+--            bukan draft, atau draft yang sudah ada
+--          - Konsolidasi migration modules code ke dalam schema utama
 -- ============================================================
 
 -- ============================================================
@@ -71,6 +79,7 @@ CREATE TABLE IF NOT EXISTS teacher_centers (
 -- 5. MODULES
 CREATE TABLE IF NOT EXISTS modules (
   id          SERIAL        PRIMARY KEY,
+  code        VARCHAR(100)  NOT NULL,
   name        VARCHAR(255)  NOT NULL,
   description TEXT,
   is_active   BOOLEAN       NOT NULL DEFAULT TRUE,
@@ -80,12 +89,12 @@ CREATE TABLE IF NOT EXISTS modules (
 
 -- 6. STUDENTS
 CREATE TABLE IF NOT EXISTS students (
-  id          SERIAL    PRIMARY KEY,
+  id          SERIAL       PRIMARY KEY,
   name        VARCHAR(255) NOT NULL,
-  center_id   INTEGER   NOT NULL REFERENCES centers (id) ON DELETE RESTRICT,
-  is_active   BOOLEAN   NOT NULL DEFAULT TRUE,
-  created_at  TIMESTAMP NOT NULL DEFAULT NOW(),
-  updated_at  TIMESTAMP NOT NULL DEFAULT NOW()
+  center_id   INTEGER      NOT NULL REFERENCES centers (id) ON DELETE RESTRICT,
+  is_active   BOOLEAN      NOT NULL DEFAULT TRUE,
+  created_at  TIMESTAMP    NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 
 -- 7. ENROLLMENTS
@@ -140,6 +149,13 @@ CREATE TABLE IF NOT EXISTS certificate_stock_batches (
 );
 
 -- 11. REPORTS
+--
+-- Notes on design decisions (v5.0):
+--   - content is nullable: drafts can be saved with empty/partial content
+--   - word_count minimum constraint removed: enforced at application layer
+--     so drafts with < 120 words can be persisted
+--   - is_draft = TRUE  → saved to DB only, not uploaded to Drive
+--   - is_draft = FALSE → finalized, PDF generated and uploaded to Drive
 CREATE TABLE IF NOT EXISTS reports (
   id                       SERIAL       PRIMARY KEY,
   enrollment_id            INTEGER      NOT NULL UNIQUE
@@ -152,15 +168,14 @@ CREATE TABLE IF NOT EXISTS reports (
   score_attention          VARCHAR(3)   CHECK (score_attention          IN ('A+','A','B+','B')),
   score_responsibility     VARCHAR(3)   CHECK (score_responsibility     IN ('A+','A','B+','B')),
   score_coding_skills      VARCHAR(3)   CHECK (score_coding_skills      IN ('A+','A','B+','B')),
-  content                  TEXT         NOT NULL,
+  content                  TEXT,
   word_count               INTEGER      NOT NULL DEFAULT 0,
+  is_draft                 BOOLEAN      NOT NULL DEFAULT TRUE,
   drive_file_id            TEXT,
   drive_file_name          TEXT,
   drive_uploaded_at        TIMESTAMP,
   created_at               TIMESTAMP    NOT NULL DEFAULT NOW(),
-  updated_at               TIMESTAMP    NOT NULL DEFAULT NOW(),
-  CONSTRAINT chk_word_count_min
-    CHECK (word_count >= 120)
+  updated_at               TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 
 -- 12. CERTIFICATES
@@ -209,6 +224,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_teacher_centers_one_primary
   ON teacher_centers (teacher_id)
   WHERE is_primary = TRUE;
 
+-- Module code unik (case-insensitive)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_modules_code ON modules (UPPER(code));
+
 
 -- ============================================================
 -- SEQUENCE (medal — cert memakai certificate_stock_batches)
@@ -241,6 +259,7 @@ CREATE INDEX IF NOT EXISTS idx_enrollments_is_active           ON enrollments (i
 CREATE INDEX IF NOT EXISTS idx_cert_stock_batches_center_id    ON certificate_stock_batches (center_id);
 CREATE INDEX IF NOT EXISTS idx_reports_enrollment_id           ON reports (enrollment_id);
 CREATE INDEX IF NOT EXISTS idx_reports_teacher_id              ON reports (teacher_id);
+CREATE INDEX IF NOT EXISTS idx_reports_is_draft                ON reports (is_draft);
 CREATE INDEX IF NOT EXISTS idx_reports_drive_uploaded_at       ON reports (drive_uploaded_at);
 CREATE INDEX IF NOT EXISTS idx_certs_enrollment_id             ON certificates (enrollment_id);
 CREATE INDEX IF NOT EXISTS idx_certs_teacher_id                ON certificates (teacher_id);
@@ -638,8 +657,12 @@ CREATE TRIGGER trg_reports_link_to_prints
 -- VIEWS
 -- ============================================================
 
--- [v3.2] Hapus WHERE e.is_active = TRUE agar enrollment complete
---        (is_active = FALSE) tetap tampil dengan status yang benar.
+-- [v5.0] enrollment_status sekarang membedakan:
+--   - 'complete'        → report sudah diupload ke Drive (is_draft=FALSE, drive_file_id NOT NULL)
+--   - 'report_drafted'  → report ada tapi masih draft (is_draft=TRUE)
+--   - 'scan_uploaded'   → scan sudah diupload, belum ada report
+--   - 'cert_printed'    → cert sudah dicetak, belum ada scan
+--   - 'pending'         → belum ada aktivitas
 CREATE OR REPLACE VIEW vw_enrollment_status AS
 SELECT
   e.id                                                             AS enrollment_id,
@@ -655,11 +678,13 @@ SELECT
   COUNT(DISTINCT med.id)                                           AS medal_printed_count,
   MAX(med.printed_at)                                              AS last_medal_printed_at,
   r.id                                                             AS report_id,
+  r.is_draft                                                       AS report_is_draft,
   r.drive_file_id                                                  AS report_drive_file_id,
   r.drive_uploaded_at                                              AS report_uploaded_at,
   CASE
     WHEN r.drive_file_id IS NOT NULL            THEN 'complete'
-    WHEN r.id            IS NOT NULL            THEN 'report_uploaded'
+    WHEN r.id IS NOT NULL AND r.is_draft = TRUE THEN 'report_drafted'
+    WHEN r.id IS NOT NULL                       THEN 'complete'
     WHEN BOOL_OR(cert.scan_file_id IS NOT NULL) THEN 'scan_uploaded'
     WHEN COUNT(DISTINCT cert.id) > 0            THEN 'cert_printed'
     ELSE                                             'pending'
@@ -674,11 +699,14 @@ LEFT JOIN  medals       med  ON med.enrollment_id  = e.id
 LEFT JOIN  reports      r    ON r.enrollment_id    = e.id
 GROUP BY
   e.id, s.name, m.name, u.name, c.name,
-  r.id, r.drive_file_id, r.drive_uploaded_at;
+  r.id, r.is_draft, r.drive_file_id, r.drive_uploaded_at;
 
--- [v3.2] Hapus AND e.is_active = TRUE agar enrollment complete
---        tetap muncul di monitoring upload status.
---        Filter u.is_active = TRUE dipertahankan.
+-- [v5.0] upload_status membedakan:
+--   - 'complete'       → report di Drive
+--   - 'report_drafted' → report ada tapi masih draft
+--   - 'scan_uploaded'  → scan ada, belum ada report
+--   - 'printed'        → cert dicetak, belum ada scan
+--   - 'not_started'    → belum ada aktivitas
 CREATE OR REPLACE VIEW vw_teacher_upload_status AS
 SELECT
   u.id                  AS teacher_id,
@@ -692,14 +720,16 @@ SELECT
   cert.scan_file_id,
   cert.scan_uploaded_at,
   r.id                  AS report_id,
+  r.is_draft            AS report_is_draft,
   r.drive_file_id       AS report_drive_file_id,
   r.drive_uploaded_at   AS report_uploaded_at,
   CASE
-    WHEN r.drive_file_id   IS NOT NULL THEN 'complete'
-    WHEN r.id              IS NOT NULL THEN 'report_drafted'
-    WHEN cert.scan_file_id IS NOT NULL THEN 'scan_uploaded'
-    WHEN cert.id           IS NOT NULL THEN 'printed'
-    ELSE                                    'not_started'
+    WHEN r.drive_file_id   IS NOT NULL              THEN 'complete'
+    WHEN r.id IS NOT NULL AND r.is_draft = TRUE     THEN 'report_drafted'
+    WHEN r.id IS NOT NULL                           THEN 'complete'
+    WHEN cert.scan_file_id IS NOT NULL              THEN 'scan_uploaded'
+    WHEN cert.id           IS NOT NULL              THEN 'printed'
+    ELSE                                                 'not_started'
   END                   AS upload_status
 FROM       enrollments  e
 JOIN       users        u    ON u.id = e.teacher_id
@@ -792,28 +822,3 @@ WHERE  c.is_active = TRUE;
 -- INSERT INTO users (email, name, role, is_active)
 -- VALUES ('superadmin@gmail.com', 'Super Admin', 'super_admin', TRUE)
 -- ON CONFLICT (email) DO NOTHING;
-
--- ============================================================
--- MIGRATION: Add code column to modules table
--- Run this ONCE on your existing database before deploying
--- the updated backend.
--- ============================================================
-
--- Step 1: Add code column (nullable first to handle existing rows)
-ALTER TABLE modules ADD COLUMN IF NOT EXISTS code VARCHAR(100);
-
--- Step 2: Backfill existing rows with a placeholder code
--- Format: LEGACY-{id} so existing data doesn't break
-UPDATE modules SET code = 'LEGACY-' || id::TEXT WHERE code IS NULL;
-
--- Step 3: Set NOT NULL constraint after backfill
-ALTER TABLE modules ALTER COLUMN code SET NOT NULL;
-
--- Step 4: Add unique index on code (case-insensitive via UPPER)
-CREATE UNIQUE INDEX IF NOT EXISTS idx_modules_code ON modules (UPPER(code));
-
--- ============================================================
--- VERIFY
--- Run this after migration to confirm:
---   SELECT id, code, name FROM modules ORDER BY id;
--- ============================================================
