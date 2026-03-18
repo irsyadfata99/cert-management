@@ -19,13 +19,15 @@ const REQUIRED_ASSETS = [
   { path: FONT_BOLD_PATH, label: "Calibri Bold font" },
 ];
 
-for (const asset of REQUIRED_ASSETS) {
-  if (!fs.existsSync(asset.path)) {
-    const msg = `Required asset not found: ${asset.label} at ${asset.path}`;
-    logger.error(msg);
-    throw new Error(msg);
+const checkAssets = () => {
+  for (const asset of REQUIRED_ASSETS) {
+    if (!fs.existsSync(asset.path)) {
+      const msg = `Required asset not found: ${asset.label} at ${asset.path}`;
+      logger.error(msg);
+      throw new Error(msg);
+    }
   }
-}
+};
 
 // ── Template cache dengan checksum ───────────────────────────
 let _cachedTemplateBytes = null;
@@ -43,7 +45,6 @@ const getTemplateBytes = () => {
     return _cachedTemplateBytes;
   }
 
-  // Hitung checksum file saat ini
   const currentChecksum = skipChecksum
     ? null
     : computeFileChecksum(TEMPLATE_PATH);
@@ -63,7 +64,6 @@ const getTemplateBytes = () => {
         currentChecksum,
     );
   } else {
-    // First load
     logger.info("PDF template loaded and cached", {
       path: TEMPLATE_PATH,
       checksum: currentChecksum ?? "skipped",
@@ -73,6 +73,24 @@ const getTemplateBytes = () => {
   _cachedTemplateBytes = fs.readFileSync(TEMPLATE_PATH);
   _cachedTemplateChecksum = currentChecksum;
   return _cachedTemplateBytes;
+};
+
+let _cachedFontRegularBytes = null;
+let _cachedFontBoldBytes = null;
+
+const getFontBytes = () => {
+  if (!_cachedFontRegularBytes) {
+    _cachedFontRegularBytes = fs.readFileSync(FONT_REGULAR_PATH);
+    logger.info("Calibri Regular font loaded and cached");
+  }
+  if (!_cachedFontBoldBytes) {
+    _cachedFontBoldBytes = fs.readFileSync(FONT_BOLD_PATH);
+    logger.info("Calibri Bold font loaded and cached");
+  }
+  return {
+    fontRegularBytes: _cachedFontRegularBytes,
+    fontBoldBytes: _cachedFontBoldBytes,
+  };
 };
 
 const FIELD_POSITIONS = {
@@ -159,7 +177,6 @@ const truncateText = (text, font, fontSize, maxWidth) => {
   return truncated + "…";
 };
 
-// ── Draw justified text line ──────────────────────────────────
 const drawJustifiedLine = (
   page,
   line,
@@ -194,6 +211,8 @@ const drawJustifiedLine = (
 // ── Main generator ────────────────────────────────────────────
 
 const generateReportPdf = async (data) => {
+  checkAssets();
+
   const {
     studentName,
     teacherName,
@@ -210,19 +229,16 @@ const generateReportPdf = async (data) => {
   const templateBytes = getTemplateBytes();
   const pdfDoc = await PDFDocument.load(templateBytes);
 
-  // Register fontkit for custom font embedding
   pdfDoc.registerFontkit(fontkit);
 
-  // Embed Calibri fonts
-  const fontRegularBytes = fs.readFileSync(FONT_REGULAR_PATH);
-  const fontBoldBytes = fs.readFileSync(FONT_BOLD_PATH);
+  // fix: gunakan cached font bytes
+  const { fontRegularBytes, fontBoldBytes } = getFontBytes();
   const font = await pdfDoc.embedFont(fontRegularBytes);
   const fontBold = await pdfDoc.embedFont(fontBoldBytes);
 
   const page = pdfDoc.getPages()[0];
   const black = rgb(0, 0, 0);
 
-  // ── Header fields — no background (transparent) ───────────
   const drawHeader = (text, posKey) => {
     if (!text) return;
     const pos = FIELD_POSITIONS[posKey];
@@ -248,7 +264,6 @@ const generateReportPdf = async (data) => {
   drawHeader(period ?? "-", "period");
   drawHeader(teacherName, "teacher_name");
 
-  // ── Scores — black, centered horizontally & vertically ────
   const scores = [
     { key: "score_creativity", val: scoreCreativity },
     { key: "score_critical_thinking", val: scoreCriticalThinking },
@@ -276,7 +291,6 @@ const generateReportPdf = async (data) => {
     });
   }
 
-  // ── Comment — Calibri Regular, justified, dengan paragraph support ──
   if (content) {
     const pos = FIELD_POSITIONS.comment;
 

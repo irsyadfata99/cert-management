@@ -61,7 +61,6 @@ const handleMulterError = (err, req, res, next) => {
   next(err);
 };
 
-// ── Helper: resolve center_id untuk stock operations ──────────
 const resolveStockCenterId = (req, paramCenterId) => {
   if (paramCenterId) return parseInt(paramCenterId);
   if (req.user.role === "teacher") return undefined;
@@ -72,7 +71,6 @@ const resolveStockCenterId = (req, paramCenterId) => {
 // STOCK ENDPOINTS
 // ============================================================
 
-// GET /drive/stock — all centers stock overview
 router.get(
   "/stock",
   authorize("admin", "super_admin"),
@@ -90,7 +88,6 @@ router.get(
   },
 );
 
-// GET /drive/stock/batch/:centerId — detail batch satu center
 router.get(
   "/stock/batch/:centerId",
   authorize("admin", "super_admin"),
@@ -117,7 +114,6 @@ router.get(
   },
 );
 
-// POST /drive/stock/certificate/add — tambah/extend certificate batch
 router.post(
   "/stock/certificate/add",
   authorize("admin", "super_admin"),
@@ -159,7 +155,6 @@ router.post(
   },
 );
 
-// POST /drive/stock/certificate/transfer — transfer certificate batch antar center
 router.post(
   "/stock/certificate/transfer",
   authorize("admin", "super_admin"),
@@ -217,7 +212,6 @@ router.post(
   },
 );
 
-// GET /drive/stock/certificate/transfer/preview
 router.get(
   "/stock/certificate/transfer/preview",
   authorize("admin", "super_admin"),
@@ -311,7 +305,6 @@ router.get(
   },
 );
 
-// POST /drive/stock/medal/add
 router.post(
   "/stock/medal/add",
   authorize("admin", "super_admin"),
@@ -350,7 +343,6 @@ router.post(
   },
 );
 
-// POST /drive/stock/medal/transfer
 router.post(
   "/stock/medal/transfer",
   authorize("admin", "super_admin"),
@@ -384,7 +376,6 @@ router.post(
   },
 );
 
-// PATCH /drive/stock/threshold
 router.patch(
   "/stock/threshold",
   authorize("admin", "super_admin"),
@@ -443,6 +434,7 @@ router.post(
 
       const certId = parseInt(req.params.id);
       const teacherId = req.user.id;
+
       const certCheck = await query(
         `SELECT c.id, c.scan_file_id, c.is_reprint, c.enrollment_id,
                 s.name AS student_name,
@@ -451,14 +443,17 @@ router.post(
          JOIN enrollments e ON e.id = c.enrollment_id
          JOIN students s    ON s.id = e.student_id
          JOIN modules m     ON m.id = e.module_id
-         WHERE c.id = $1 AND e.teacher_id = $2`,
+         WHERE c.id = $1
+           AND e.teacher_id = $2
+           AND e.is_active = TRUE`,
         [certId, teacherId],
       );
 
       if (certCheck.rows.length === 0) {
         return res.status(404).json({
           success: false,
-          message: "Certificate not found or not assigned to you",
+          message:
+            "Certificate not found, not assigned to you, or enrollment is no longer active",
         });
       }
 

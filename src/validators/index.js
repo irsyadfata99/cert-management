@@ -58,7 +58,7 @@ const monitoringUploadQuery = paginationQuery.extend({
   status: z
     .enum([
       "not_started",
-      "printed",
+      "cert_printed",
       "scan_uploaded",
       "report_drafted",
       "complete",
@@ -115,8 +115,6 @@ const listStudentsQuery = paginationQuery.extend({
   center_id: z.string().regex(/^\d+$/).optional(),
 });
 
-// ── Module Validators ─────────────────────────────────────────
-
 const createModuleBody = z.object({
   code: z.string().min(1, "Module code is required").max(100),
   name: z.string().min(1, "Module name is required").max(255),
@@ -138,8 +136,6 @@ const updateModuleBody = z
       message: "At least one field must be provided",
     },
   );
-
-// ── Teacher Validators ────────────────────────────────────────
 
 const createTeacherBody = z.object({
   email: z.string().email("Invalid email format").max(255),
@@ -232,8 +228,6 @@ const listCertsQuery = paginationQuery.extend({
   is_reprint: z.enum(["true", "false"]).optional(),
 });
 
-// ── Report Validators ─────────────────────────────────────────
-
 const createReportBody = z.object({
   enrollment_id: z
     .number({ required_error: "enrollment_id is required" })
@@ -265,8 +259,6 @@ const updateReportBody = z
   .refine((d) => Object.values(d).some((v) => v !== undefined), {
     message: "At least one field must be provided",
   });
-
-// ── Stock Validators ──────────────────────────────────────────
 
 const addCertificateBatchBody = z
   .object({
@@ -333,8 +325,6 @@ const updateThresholdBody = z.object({
     .int()
     .min(0, "Threshold must be >= 0"),
 });
-
-// ── Validate Middleware ───────────────────────────────────────
 
 const validate = (schema, target = "body") => {
   return (req, res, next) => {

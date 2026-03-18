@@ -639,7 +639,6 @@ router.post("/modules/import", handleXlsxUpload, async (req, res, next) => {
       });
     }
 
-    // [FIX-1] Pre-validate di luar transaksi
     const toImport = [];
     const skipped = [];
 
@@ -665,7 +664,6 @@ router.post("/modules/import", handleXlsxUpload, async (req, res, next) => {
       toImport.push(row);
     }
 
-    // [FIX-1] Atomik INSERT
     const imported = [];
     if (toImport.length > 0) {
       await withTransaction(async (client) => {
@@ -905,7 +903,6 @@ router.patch(
 // TEACHERS
 // ============================================================
 
-// GET /admin/teachers/template
 router.get("/teachers/template", async (req, res, next) => {
   try {
     const workbook = new ExcelJS.Workbook();
@@ -944,8 +941,6 @@ router.get("/teachers/template", async (req, res, next) => {
   }
 });
 
-// [FIX-1] POST /teachers/import — sama seperti students/import,
-// pre-validate di luar transaksi, INSERT atomik di dalam transaksi.
 router.post("/teachers/import", handleXlsxUpload, async (req, res, next) => {
   try {
     if (!req.file) {
@@ -989,7 +984,6 @@ router.post("/teachers/import", handleXlsxUpload, async (req, res, next) => {
       });
     }
 
-    // [FIX-1] Pre-validate di luar transaksi
     const toImport = [];
     const skipped = [];
 
@@ -1027,7 +1021,6 @@ router.post("/teachers/import", handleXlsxUpload, async (req, res, next) => {
       toImport.push({ email: row.email, centerId, centerName });
     }
 
-    // [FIX-1] Atomik INSERT — semua teacher + teacher_centers dalam satu transaksi
     const imported = [];
     if (toImport.length > 0) {
       await withTransaction(async (client) => {
@@ -1719,6 +1712,20 @@ router.post(
         }
 
         const centerId = studentCheck.rows[0].center_id;
+
+        const teacherCenterCheck = await client.query(
+          `SELECT 1 FROM teacher_centers
+           WHERE teacher_id = $1 AND center_id = $2`,
+          [teacher_id, centerId],
+        );
+
+        if (teacherCenterCheck.rows.length === 0) {
+          const err = new Error(
+            "Teacher is not assigned to the same center as the student",
+          );
+          err.status = 400;
+          throw err;
+        }
 
         return client.query(
           `INSERT INTO enrollments (student_id, module_id, center_id, teacher_id)

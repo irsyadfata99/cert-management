@@ -12,7 +12,7 @@ const USER_ROLES = {
 
 const ENROLLMENT_STATUSES = {
   NOT_STARTED: "not_started",
-  PRINTED: "printed",
+  CERT_PRINTED: "cert_printed",
   SCAN_UPLOADED: "scan_uploaded",
   REPORT_DRAFTED: "report_drafted",
   COMPLETE: "complete",
