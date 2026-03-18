@@ -1,37 +1,4 @@
--- ============================================================
--- SCHEMA: Certificate & Medal Management System
--- Version: 5.0
--- Changelog:
---   v3.0 - Tambah teacher_centers untuk multi-center support
---   v3.1 - Fix vw_enrollment_status & vw_teacher_upload_status
---          status values agar konsisten dengan frontend
---   v3.2 - Hapus filter is_active = TRUE pada enrollments
---          agar enrollment yang sudah complete tetap muncul
---   v4.0 - Konsolidasi penuh: hapus duplikasi cert_id_seq,
---          fn_generate_cert_id, fn_set_cert_unique_id (lama),
---          trg_certificates_unique_id (lama), vw_stock_alerts (lama);
---          integrasikan certificate_stock_batches sebagai satu-satunya
---          mekanisme stock sertifikat; rapikan urutan objek
---   v5.0 - Draft report support:
---          - Hapus CONSTRAINT chk_word_count_min (pindah ke app layer)
---          - content TEXT nullable untuk draft
---          - Tambah kolom is_draft BOOLEAN NOT NULL DEFAULT TRUE
---          - Fix vw_enrollment_status: bedakan draft vs complete report
---          - Fix vw_teacher_upload_status: report_drafted hanya jika
---            bukan draft, atau draft yang sudah ada
---          - Konsolidasi migration modules code ke dalam schema utama
--- ============================================================
-
--- ============================================================
--- EXTENSIONS
--- ============================================================
-
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
-
--- ============================================================
--- TABLES
--- ============================================================
 
 -- 1. SESSION
 CREATE TABLE IF NOT EXISTS session (
@@ -149,13 +116,6 @@ CREATE TABLE IF NOT EXISTS certificate_stock_batches (
 );
 
 -- 11. REPORTS
---
--- Notes on design decisions (v5.0):
---   - content is nullable: drafts can be saved with empty/partial content
---   - word_count minimum constraint removed: enforced at application layer
---     so drafts with < 120 words can be persisted
---   - is_draft = TRUE  → saved to DB only, not uploaded to Drive
---   - is_draft = FALSE → finalized, PDF generated and uploaded to Drive
 CREATE TABLE IF NOT EXISTS reports (
   id                       SERIAL       PRIMARY KEY,
   enrollment_id            INTEGER      NOT NULL UNIQUE
@@ -392,7 +352,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Transfer sebagian batch dari satu center ke center lain
 CREATE OR REPLACE FUNCTION fn_transfer_certificate_batch(
   p_from_center INTEGER,
   p_to_center   INTEGER,
@@ -405,6 +364,9 @@ DECLARE
   v_transfer_start INTEGER;
   v_transfer_end   INTEGER;
   v_available      INTEGER;
+  -- [FIX-3] Tentukan urutan lock berdasarkan center_id
+  v_lock_first     INTEGER;
+  v_lock_second    INTEGER;
 BEGIN
   IF p_from_center = p_to_center THEN
     RAISE EXCEPTION 'Source and destination centers must be different';
@@ -413,10 +375,25 @@ BEGIN
     RAISE EXCEPTION 'Quantity must be greater than 0';
   END IF;
 
+  v_lock_first  := LEAST(p_from_center, p_to_center);
+  v_lock_second := GREATEST(p_from_center, p_to_center);
+
+  -- Lock pertama (ID lebih kecil)
+  PERFORM id
+  FROM    certificate_stock_batches
+  WHERE   center_id = v_lock_first
+  FOR UPDATE;
+
+  -- Lock kedua (ID lebih besar)
+  PERFORM id
+  FROM    certificate_stock_batches
+  WHERE   center_id = v_lock_second
+  FOR UPDATE;
+
+  -- Setelah kedua baris ter-lock, baca data aktual
   SELECT * INTO v_from
   FROM   certificate_stock_batches
-  WHERE  center_id = p_from_center
-  FOR UPDATE;
+  WHERE  center_id = p_from_center;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'No batch found for source center_id %', p_from_center;
@@ -438,8 +415,7 @@ BEGIN
 
   SELECT * INTO v_to
   FROM   certificate_stock_batches
-  WHERE  center_id = p_to_center
-  FOR UPDATE;
+  WHERE  center_id = p_to_center;
 
   IF NOT FOUND THEN
     INSERT INTO certificate_stock_batches
@@ -656,13 +632,6 @@ CREATE TRIGGER trg_reports_link_to_prints
 -- ============================================================
 -- VIEWS
 -- ============================================================
-
--- [v5.0] enrollment_status sekarang membedakan:
---   - 'complete'        → report sudah diupload ke Drive (is_draft=FALSE, drive_file_id NOT NULL)
---   - 'report_drafted'  → report ada tapi masih draft (is_draft=TRUE)
---   - 'scan_uploaded'   → scan sudah diupload, belum ada report
---   - 'cert_printed'    → cert sudah dicetak, belum ada scan
---   - 'pending'         → belum ada aktivitas
 CREATE OR REPLACE VIEW vw_enrollment_status AS
 SELECT
   e.id                                                             AS enrollment_id,
@@ -684,7 +653,6 @@ SELECT
   CASE
     WHEN r.drive_file_id IS NOT NULL            THEN 'complete'
     WHEN r.id IS NOT NULL AND r.is_draft = TRUE THEN 'report_drafted'
-    WHEN r.id IS NOT NULL                       THEN 'complete'
     WHEN BOOL_OR(cert.scan_file_id IS NOT NULL) THEN 'scan_uploaded'
     WHEN COUNT(DISTINCT cert.id) > 0            THEN 'cert_printed'
     ELSE                                             'pending'
@@ -701,12 +669,6 @@ GROUP BY
   e.id, s.name, m.name, u.name, c.name,
   r.id, r.is_draft, r.drive_file_id, r.drive_uploaded_at;
 
--- [v5.0] upload_status membedakan:
---   - 'complete'       → report di Drive
---   - 'report_drafted' → report ada tapi masih draft
---   - 'scan_uploaded'  → scan ada, belum ada report
---   - 'printed'        → cert dicetak, belum ada scan
---   - 'not_started'    → belum ada aktivitas
 CREATE OR REPLACE VIEW vw_teacher_upload_status AS
 SELECT
   u.id                  AS teacher_id,
@@ -728,7 +690,8 @@ SELECT
     WHEN r.id IS NOT NULL AND r.is_draft = TRUE     THEN 'report_drafted'
     WHEN r.id IS NOT NULL                           THEN 'complete'
     WHEN cert.scan_file_id IS NOT NULL              THEN 'scan_uploaded'
-    WHEN cert.id           IS NOT NULL              THEN 'printed'
+    -- [FIX-2] Diubah dari 'printed' → 'cert_printed'
+    WHEN cert.id           IS NOT NULL              THEN 'cert_printed'
     ELSE                                                 'not_started'
   END                   AS upload_status
 FROM       enrollments  e
@@ -745,6 +708,7 @@ LEFT JOIN LATERAL (
 ) cert ON TRUE
 LEFT JOIN reports r ON r.enrollment_id = e.id
 WHERE u.is_active = TRUE;
+
 
 CREATE OR REPLACE VIEW vw_monthly_center_activity AS
 WITH cert_monthly AS (
@@ -786,6 +750,7 @@ LEFT JOIN  cert_monthly cm  ON cm.center_id = am.center_id AND cm.month = am.mon
 LEFT JOIN  medal_monthly mm ON mm.center_id = am.center_id AND mm.month = am.month
 WHERE  c.is_active = TRUE
 ORDER  BY am.month DESC, c.name;
+
 
 -- [v4.0] vw_stock_alerts menggunakan certificate_stock_batches
 --        sebagai satu-satunya sumber data quantity sertifikat.

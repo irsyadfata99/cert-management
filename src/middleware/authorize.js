@@ -51,8 +51,6 @@ const authorize = (...roles) => {
         }
 
         const dbRow = freshCheck.rows[0];
-        const cachedAt = new Date(cached.cached_at ?? 0).getTime();
-        const updatedAt = new Date(dbRow.updated_at).getTime();
 
         if (!dbRow.is_active) {
           req.session.destroy(() => {});
@@ -60,6 +58,11 @@ const authorize = (...roles) => {
             .status(401)
             .json({ success: false, message: "Account deactivated" });
         }
+
+        const updatedAt = new Date(dbRow.updated_at).getTime();
+        const cachedAt = cached.cached_at
+          ? new Date(cached.cached_at).getTime()
+          : 0;
 
         if (updatedAt > cachedAt) {
           logger.info("Session cache stale, refreshing", { userId: cached.id });
@@ -100,30 +103,33 @@ const authorize = (...roles) => {
 };
 
 const fetchUserFromDb = async (userId) => {
-  const [userResult, centersResult] = await Promise.all([
-    query(
-      `SELECT id, email, name, avatar, role, center_id,
-              drive_folder_id, is_active, updated_at
-       FROM users
-       WHERE id = $1`,
-      [userId],
-    ),
-    query(
-      `SELECT center_id, is_primary
-       FROM teacher_centers
-       WHERE teacher_id = $1
-       ORDER BY is_primary DESC`,
-      [userId],
-    ),
-  ]);
+  const userResult = await query(
+    `SELECT id, email, name, avatar, role, center_id,
+            drive_folder_id, is_active, updated_at
+     FROM users
+     WHERE id = $1`,
+    [userId],
+  );
 
   if (userResult.rows.length === 0) return null;
 
   const user = userResult.rows[0];
 
+  let centerIds = [];
+  if (user.role === "teacher") {
+    const centersResult = await query(
+      `SELECT center_id, is_primary
+       FROM teacher_centers
+       WHERE teacher_id = $1
+       ORDER BY is_primary DESC`,
+      [userId],
+    );
+    centerIds = centersResult.rows.map((r) => r.center_id);
+  }
+
   return {
     ...user,
-    center_ids: centersResult.rows.map((r) => r.center_id),
+    center_ids: centerIds,
     cached_at: new Date().toISOString(),
   };
 };

@@ -428,30 +428,40 @@ router.patch(
 // MONITORING
 // ============================================================
 
+// [FIX] GET /monitoring/centers
 router.get("/monitoring/centers", async (req, res, next) => {
   try {
     const result = await query(
       `SELECT
-         c.id                                        AS center_id,
-         c.name                                      AS center_name,
-         COALESCE(cs.quantity, 0)                    AS cert_stock,
-         COALESCE(ms.quantity, 0)                    AS medal_stock,
-         COALESCE(cs.low_stock_threshold, 10)        AS cert_threshold,
-         COALESCE(ms.low_stock_threshold, 10)        AS medal_threshold,
+         c.id                                                              AS center_id,
+         c.name                                                            AS center_name,
+         -- [FIX] Baca dari certificate_stock_batches, bukan certificate_stock.quantity
+         -- certificate_stock.quantity sudah tidak diupdate sejak schema v4.0
+         COALESCE(b.range_end - b.current_position + 1, 0)               AS cert_quantity,
+         COALESCE(cs.low_stock_threshold, 10)                             AS cert_threshold,
+         COALESCE(b.range_end - b.current_position + 1, 0)
+           <= COALESCE(cs.low_stock_threshold, 10)                        AS cert_low_stock,
+         -- Medal stock tetap dari medal_stock.quantity (tidak berubah)
+         COALESCE(ms.quantity, 0)                                         AS medal_quantity,
+         COALESCE(ms.low_stock_threshold, 10)                             AS medal_threshold,
+         COALESCE(ms.quantity, 0) <= COALESCE(ms.low_stock_threshold, 10) AS medal_low_stock,
          COUNT(DISTINCT u.id) FILTER (
            WHERE u.role = 'teacher' AND u.is_active = TRUE
-         )                                           AS teacher_count,
+         )                                                                 AS teacher_count,
          COUNT(DISTINCT s.id) FILTER (
            WHERE s.is_active = TRUE
-         )                                           AS student_count
+         )                                                                 AS student_count
        FROM centers c
-       LEFT JOIN certificate_stock cs ON cs.center_id = c.id
-       LEFT JOIN medal_stock ms       ON ms.center_id = c.id
-       LEFT JOIN users u              ON u.center_id  = c.id
-       LEFT JOIN students s           ON s.center_id  = c.id
+       -- [FIX] JOIN ke certificate_stock_batches (sumber kebenaran cert stock)
+       LEFT JOIN certificate_stock_batches b  ON b.center_id = c.id
+       -- Tetap JOIN certificate_stock untuk low_stock_threshold saja
+       LEFT JOIN certificate_stock         cs ON cs.center_id = c.id
+       LEFT JOIN medal_stock               ms ON ms.center_id = c.id
+       LEFT JOIN users                     u  ON u.center_id  = c.id
+       LEFT JOIN students                  s  ON s.center_id  = c.id
        WHERE c.is_active = TRUE
-       GROUP BY c.id, c.name, cs.quantity, ms.quantity,
-                cs.low_stock_threshold, ms.low_stock_threshold
+       GROUP BY c.id, c.name, b.range_end, b.current_position,
+                cs.low_stock_threshold, ms.quantity, ms.low_stock_threshold
        ORDER BY c.name`,
     );
 
@@ -497,7 +507,6 @@ router.get(
              vu.report_uploaded_at,
              vu.upload_status,
              u.drive_folder_id                               AS teacher_drive_folder_id,
-             -- Original (non-reprint) cert ID
              (
                SELECT c2.cert_unique_id
                FROM certificates c2
@@ -506,7 +515,6 @@ router.get(
                ORDER BY c2.printed_at ASC
                LIMIT 1
              )                                               AS print_cert_id,
-             -- Reprint cert IDs, comma-separated
              (
                SELECT STRING_AGG(c3.cert_unique_id, ', ' ORDER BY c3.printed_at ASC)
                FROM certificates c3

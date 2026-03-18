@@ -2,6 +2,7 @@ const { PDFDocument, rgb } = require("pdf-lib");
 const fontkit = require("@pdf-lib/fontkit");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const logger = require("../config/logger");
 
 const PAGE_HEIGHT = 842;
@@ -12,8 +13,6 @@ const FONT_REGULAR_PATH = path.join(
 );
 const FONT_BOLD_PATH = path.join(__dirname, "../assets/fonts/calibri-bold.ttf");
 
-// Validate required assets exist at module load time so the error is
-// caught early (during startup) rather than silently at report generation.
 const REQUIRED_ASSETS = [
   { path: TEMPLATE_PATH, label: "PDF template" },
   { path: FONT_REGULAR_PATH, label: "Calibri Regular font" },
@@ -22,20 +21,57 @@ const REQUIRED_ASSETS = [
 
 for (const asset of REQUIRED_ASSETS) {
   if (!fs.existsSync(asset.path)) {
-    // Log as error and throw so the process fails fast with a clear message.
     const msg = `Required asset not found: ${asset.label} at ${asset.path}`;
     logger.error(msg);
     throw new Error(msg);
   }
 }
 
-// Template bytes are cached after first load. Restart the server to pick
-// up a new template file (intentional — templates should not change at runtime).
+// ── Template cache dengan checksum ───────────────────────────
 let _cachedTemplateBytes = null;
+let _cachedTemplateChecksum = null;
+
+const computeFileChecksum = (filePath) => {
+  const content = fs.readFileSync(filePath);
+  return crypto.createHash("md5").update(content).digest("hex");
+};
 
 const getTemplateBytes = () => {
-  if (_cachedTemplateBytes) return _cachedTemplateBytes;
+  const skipChecksum = process.env.REPORT_TEMPLATE_SKIP_CHECKSUM === "true";
+
+  if (skipChecksum && _cachedTemplateBytes) {
+    return _cachedTemplateBytes;
+  }
+
+  // Hitung checksum file saat ini
+  const currentChecksum = skipChecksum
+    ? null
+    : computeFileChecksum(TEMPLATE_PATH);
+
+  if (_cachedTemplateBytes && currentChecksum === _cachedTemplateChecksum) {
+    return _cachedTemplateBytes;
+  }
+
+  if (_cachedTemplateBytes && currentChecksum !== _cachedTemplateChecksum) {
+    logger.warn(
+      "PDF template file changed on disk. Cache invalidated and reloaded. " +
+        "All subsequent reports will use the new template. " +
+        "Previous checksum: " +
+        _cachedTemplateChecksum +
+        ", " +
+        "New checksum: " +
+        currentChecksum,
+    );
+  } else {
+    // First load
+    logger.info("PDF template loaded and cached", {
+      path: TEMPLATE_PATH,
+      checksum: currentChecksum ?? "skipped",
+    });
+  }
+
   _cachedTemplateBytes = fs.readFileSync(TEMPLATE_PATH);
+  _cachedTemplateChecksum = currentChecksum;
   return _cachedTemplateBytes;
 };
 
@@ -52,14 +88,13 @@ const FIELD_POSITIONS = {
   comment: { x: 74.7, y: PAGE_HEIGHT - 504.0, maxWidth: 450 },
 };
 
-// Score box from template: x=484.5 to x=535.5, width=51
 const SCORE_BOX = { x: 484.5, width: 51 };
 
 const FONT_SIZE_HEADER = 12;
 const FONT_SIZE_SCORE = 12;
 const FONT_SIZE_COMMENT = 12;
 const LINE_HEIGHT = 16;
-// Comment stops here — leaves room for legend at bottom
+const PARAGRAPH_SPACING = LINE_HEIGHT * 1.6;
 const COMMENT_BOTTOM_Y = PAGE_HEIGHT - 700;
 
 const COVER_WIDTHS = {
@@ -70,6 +105,18 @@ const COVER_WIDTHS = {
 };
 
 // ── Helpers ───────────────────────────────────────────────────
+const splitIntoParagraphs = (text) => {
+  if (!text || typeof text !== "string") return [""];
+
+  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+  const paragraphs = normalized
+    .split(/\n{2,}/)
+    .map((p) => p.replace(/\n/g, " ").replace(/\s+/g, " ").trim())
+    .filter((p) => p.length > 0);
+
+  return paragraphs.length > 0 ? paragraphs : [""];
+};
 
 const normalizeText = (text) =>
   text
@@ -79,8 +126,7 @@ const normalizeText = (text) =>
     .trim();
 
 const wrapText = (text, font, fontSize, maxWidth) => {
-  const normalized = normalizeText(text);
-  const words = normalized.split(" ");
+  const words = text.split(" ");
   const lines = [];
   let currentLine = "";
 
@@ -181,7 +227,12 @@ const generateReportPdf = async (data) => {
     if (!text) return;
     const pos = FIELD_POSITIONS[posKey];
     const width = COVER_WIDTHS[posKey] || 160;
-    const safe = truncateText(String(text), font, FONT_SIZE_HEADER, width - 4);
+    const safe = truncateText(
+      normalizeText(String(text)),
+      font,
+      FONT_SIZE_HEADER,
+      width - 4,
+    );
 
     page.drawText(safe, {
       x: pos.x,
@@ -213,7 +264,6 @@ const generateReportPdf = async (data) => {
     const textW = fontBold.widthOfTextAtSize(label, FONT_SIZE_SCORE);
     const textH = FONT_SIZE_SCORE;
 
-    // Exact center from template coordinates
     const drawX = SCORE_BOX.x + SCORE_BOX.width / 2 - textW / 2;
     const drawY = pos.centerY - textH / 2;
 
@@ -226,11 +276,10 @@ const generateReportPdf = async (data) => {
     });
   }
 
-  // ── Comment — Calibri Regular, justified ──────────────────
+  // ── Comment — Calibri Regular, justified, dengan paragraph support ──
   if (content) {
     const pos = FIELD_POSITIONS.comment;
 
-    // Cover placeholder text only
     page.drawRectangle({
       x: pos.x,
       y: pos.y - 2,
@@ -239,25 +288,39 @@ const generateReportPdf = async (data) => {
       color: rgb(1, 1, 1),
     });
 
-    const lines = wrapText(content, font, FONT_SIZE_COMMENT, pos.maxWidth);
+    const paragraphs = splitIntoParagraphs(content);
     let currentY = pos.y;
+    let isFirstParagraph = true;
 
-    for (let i = 0; i < lines.length; i++) {
+    for (const paragraph of paragraphs) {
+      if (!paragraph) continue;
+
+      if (!isFirstParagraph) {
+        currentY -= PARAGRAPH_SPACING;
+      }
+      isFirstParagraph = false;
+
       if (currentY < COMMENT_BOTTOM_Y) break;
 
-      const isLast = i === lines.length - 1;
-      drawJustifiedLine(
-        page,
-        lines[i],
-        pos.x,
-        currentY,
-        font,
-        FONT_SIZE_COMMENT,
-        pos.maxWidth,
-        isLast,
-        black,
-      );
-      currentY -= LINE_HEIGHT;
+      const lines = wrapText(paragraph, font, FONT_SIZE_COMMENT, pos.maxWidth);
+
+      for (let i = 0; i < lines.length; i++) {
+        if (currentY < COMMENT_BOTTOM_Y) break;
+
+        const isLastLine = i === lines.length - 1;
+        drawJustifiedLine(
+          page,
+          lines[i],
+          pos.x,
+          currentY,
+          font,
+          FONT_SIZE_COMMENT,
+          pos.maxWidth,
+          isLastLine,
+          black,
+        );
+        currentY -= LINE_HEIGHT;
+      }
     }
   }
 

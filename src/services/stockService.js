@@ -2,7 +2,7 @@ const { query } = require("../config/database");
 const logger = require("../config/logger");
 
 // ============================================================
-// CERTIFICATE BATCH STOCK
+// STOCK SERVICE
 // ============================================================
 
 const getCertificateBatch = async (centerId) => {
@@ -169,7 +169,7 @@ const normalizeBatchError = (err) => {
 };
 
 // ============================================================
-// MEDAL STOCK (tidak berubah)
+// MEDAL STOCK
 // ============================================================
 
 const normalizeTransferError = (err) => {
@@ -216,59 +216,6 @@ const normalizeTransferError = (err) => {
   }
 
   return err;
-};
-
-const getStockByCenter = async (centerId) => {
-  const [batchResult, medalResult] = await Promise.all([
-    query(
-      `SELECT
-         b.center_id,
-         c.name AS center_name,
-         b.range_start,
-         b.range_end,
-         b.current_position,
-         b.range_end - b.current_position + 1 AS cert_available,
-         b.current_position - b.range_start   AS cert_used
-       FROM certificate_stock_batches b
-       JOIN centers c ON c.id = b.center_id
-       WHERE b.center_id = $1`,
-      [centerId],
-    ),
-    query(
-      `SELECT
-         c.id AS center_id, c.name AS center_name,
-         ms.quantity AS medal_quantity,
-         ms.low_stock_threshold AS medal_threshold,
-         ms.quantity <= ms.low_stock_threshold AS medal_low_stock
-       FROM centers c
-       LEFT JOIN medal_stock ms ON ms.center_id = c.id
-       WHERE c.id = $1 AND c.is_active = TRUE`,
-      [centerId],
-    ),
-  ]);
-
-  if (medalResult.rows.length === 0) {
-    const err = new Error("Center not found or inactive");
-    err.status = 404;
-    throw err;
-  }
-
-  const batch = batchResult.rows[0] ?? null;
-  const medal = medalResult.rows[0];
-
-  return {
-    center_id: medal.center_id,
-    center_name: medal.center_name,
-    cert_range_start: batch?.range_start ?? null,
-    cert_range_end: batch?.range_end ?? null,
-    cert_current_position: batch?.current_position ?? null,
-    cert_quantity: batch?.cert_available ?? 0,
-    cert_used: batch?.cert_used ?? 0,
-    cert_low_stock: false, // threshold check via vw_stock_alerts
-    medal_quantity: medal.medal_quantity ?? 0,
-    medal_threshold: medal.medal_threshold ?? 10,
-    medal_low_stock: medal.medal_low_stock ?? false,
-  };
 };
 
 const getAllStock = async () => {
@@ -391,15 +338,11 @@ const transferMedalStock = async ({
 };
 
 module.exports = {
-  // Certificate batch
   getCertificateBatch,
   addCertificateBatch,
   transferCertificateBatch,
-  // Medal
   addMedalStock,
   transferMedalStock,
   updateThreshold,
-  // General
-  getStockByCenter,
   getAllStock,
 };

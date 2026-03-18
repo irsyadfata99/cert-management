@@ -360,7 +360,6 @@ router.get("/reports", async (req, res, next) => {
 });
 
 // ── GET /teacher/reports/draft/:enrollmentId ──────────────────
-// Cek apakah ada draft untuk enrollment tertentu
 router.get("/reports/draft/:enrollmentId", async (req, res, next) => {
   try {
     const { teacherId } = teacherContext(req);
@@ -389,7 +388,6 @@ router.get("/reports/draft/:enrollmentId", async (req, res, next) => {
 });
 
 // ── POST /teacher/reports ─────────────────────────────────────
-// Buat report baru — bisa draft atau final
 router.post("/reports", validate(createReportBody), async (req, res, next) => {
   try {
     const { teacherId, driveFolderId, teacherName } = teacherContext(req);
@@ -430,8 +428,6 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
 
     const { student_name: studentName } = enrollment.rows[0];
 
-    // Cek scan certificate sudah diupload — hanya untuk final submission
-    // Draft boleh dibuat sebelum scan diupload
     if (!is_draft) {
       const scanCheck = await query(
         `SELECT id FROM certificates WHERE enrollment_id = $1 AND scan_file_id IS NOT NULL LIMIT 1`,
@@ -447,7 +443,6 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
       }
     }
 
-    // Cek report sudah ada
     const existingReport = await query(
       `SELECT id FROM reports WHERE enrollment_id = $1`,
       [enrollment_id],
@@ -460,7 +455,6 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
       });
     }
 
-    // Word count validation — hanya untuk final submission (is_draft: false)
     const wordCountResult = validateWordCount(content);
     if (!is_draft && !wordCountResult.valid) {
       return res.status(400).json({
@@ -468,15 +462,13 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
         message: `Report content must be at least ${wordCountResult.min} words. Current: ${wordCountResult.count} words.`,
       });
     }
-
-    // Insert report
     const result = await query(
       `INSERT INTO reports (
          enrollment_id, teacher_id, academic_year, period,
          score_creativity, score_critical_thinking, score_attention,
          score_responsibility, score_coding_skills,
          content, word_count, is_draft
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, TRUE)
        RETURNING id, enrollment_id, academic_year, period, word_count,
                  is_draft,
                  score_creativity, score_critical_thinking, score_attention,
@@ -494,7 +486,6 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
         score_coding_skills ?? null,
         content ?? "",
         wordCountResult.count,
-        is_draft ?? true,
       ],
     );
 
@@ -504,19 +495,18 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
       reportId: report.id,
       enrollmentId: enrollment_id,
       teacherId,
-      isDraft: report.is_draft,
+      isDraft: true,
+      willFinalize: !is_draft,
       wordCount: wordCountResult.count,
     });
 
-    // Jika draft — simpan ke DB saja, tidak upload ke Drive
-    if (report.is_draft) {
+    if (is_draft) {
       return res.status(201).json({
         success: true,
         data: report,
       });
     }
 
-    // Final submission — upload ke Drive
     if (!driveFolderId) {
       logger.warn("Auto upload skipped: teacher has no Drive folder", {
         teacherId,
@@ -600,6 +590,7 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
         success: true,
         data: {
           ...report,
+          is_draft: true,
           drive_upload_failed: true,
           drive_upload_error: driveErr.message,
         },
@@ -610,8 +601,6 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
   }
 });
 
-// ── PATCH /teacher/reports/:id ────────────────────────────────
-// Update report — bisa update draft atau finalize (is_draft: false)
 router.patch(
   "/reports/:id",
   validate(idParam, "params"),
@@ -649,8 +638,6 @@ router.patch(
           .status(404)
           .json({ success: false, message: "Report not found" });
       }
-
-      // Report yang sudah diupload ke Drive tidak bisa diedit
       if (existing.rows[0].drive_file_id) {
         return res.status(400).json({
           success: false,
@@ -659,15 +646,10 @@ router.patch(
       }
 
       const existingData = existing.rows[0];
-
-      // Tentukan apakah ini finalize (is_draft: false)
       const isFinalizing = is_draft === false;
 
-      // Konten final yang akan dipakai (merge existing + incoming)
       const finalContent =
         content !== undefined ? content : existingData.content;
-
-      // Word count validation — hanya saat finalize
       let wordCount;
       if (content !== undefined) {
         const wordCountResult = validateWordCount(content);
@@ -679,7 +661,6 @@ router.patch(
         }
         wordCount = wordCountResult.count;
       } else if (isFinalizing) {
-        // Finalize tanpa update content — validasi content existing
         const wordCountResult = validateWordCount(existingData.content);
         if (!wordCountResult.valid) {
           return res.status(400).json({
@@ -689,7 +670,6 @@ router.patch(
         }
         wordCount = wordCountResult.count;
       }
-
       const dirtyFields = {
         content: content !== undefined ? content : undefined,
         word_count: wordCount,
@@ -700,35 +680,48 @@ router.patch(
         score_attention,
         score_responsibility,
         score_coding_skills,
-        // is_draft hanya diupdate jika explicitly dikirim
-        ...(is_draft !== undefined && { is_draft }),
+        ...(!isFinalizing && is_draft !== undefined ? { is_draft } : {}),
       };
 
       Object.keys(dirtyFields).forEach((k) => {
         if (dirtyFields[k] === undefined) delete dirtyFields[k];
       });
 
-      if (Object.keys(dirtyFields).length === 0) {
+      if (Object.keys(dirtyFields).length === 0 && !isFinalizing) {
         return res.status(400).json({
           success: false,
           message: "At least one field must be provided",
         });
       }
 
-      const { setClause, values, nextIndex } = buildSet(dirtyFields);
+      let updatedReport;
 
-      const updateResult = await query(
-        `UPDATE reports ${setClause}
-         WHERE id = $${nextIndex}
-         RETURNING id, enrollment_id, academic_year, period, word_count,
-                   is_draft,
-                   score_creativity, score_critical_thinking, score_attention,
-                   score_responsibility, score_coding_skills,
-                   drive_file_id, drive_uploaded_at, updated_at`,
-        [...values, req.params.id],
-      );
+      if (Object.keys(dirtyFields).length > 0) {
+        const { setClause, values, nextIndex } = buildSet(dirtyFields);
 
-      const updatedReport = updateResult.rows[0];
+        const updateResult = await query(
+          `UPDATE reports ${setClause}
+           WHERE id = $${nextIndex}
+           RETURNING id, enrollment_id, academic_year, period, word_count,
+                     is_draft,
+                     score_creativity, score_critical_thinking, score_attention,
+                     score_responsibility, score_coding_skills,
+                     drive_file_id, drive_uploaded_at, updated_at`,
+          [...values, req.params.id],
+        );
+        updatedReport = updateResult.rows[0];
+      } else {
+        const currentResult = await query(
+          `SELECT id, enrollment_id, academic_year, period, word_count,
+                  is_draft,
+                  score_creativity, score_critical_thinking, score_attention,
+                  score_responsibility, score_coding_skills,
+                  drive_file_id, drive_uploaded_at, updated_at
+           FROM reports WHERE id = $1`,
+          [req.params.id],
+        );
+        updatedReport = currentResult.rows[0];
+      }
 
       logger.info("Report updated", {
         reportId: req.params.id,
@@ -737,7 +730,7 @@ router.patch(
         isFinalizing,
       });
 
-      // Jika masih draft — return langsung tanpa Drive upload
+      // Jika bukan finalize → return langsung
       if (!isFinalizing) {
         return res.status(200).json({
           success: true,
@@ -745,7 +738,7 @@ router.patch(
         });
       }
 
-      // Finalize — upload ke Drive
+      // Finalize → upload ke Drive
       if (!driveFolderId) {
         return res.status(200).json({
           success: true,
@@ -848,6 +841,7 @@ router.patch(
           success: true,
           data: {
             ...updatedReport,
+            is_draft: true,
             drive_upload_failed: true,
             drive_upload_error: driveErr.message,
           },

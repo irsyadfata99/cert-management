@@ -69,13 +69,6 @@ const resolveCenterId = (req, paramCenterId) => {
   return undefined;
 };
 
-// ============================================================
-// STUDENTS
-// ============================================================
-
-// IMPORTANT: /students/template and /students/import must be defined
-// BEFORE /students/:id to prevent Express matching them as :id param.
-
 // GET /admin/students/template
 router.get("/students/template", async (req, res, next) => {
   try {
@@ -115,7 +108,6 @@ router.get("/students/template", async (req, res, next) => {
   }
 });
 
-// POST /admin/students/import
 router.post("/students/import", handleXlsxUpload, async (req, res, next) => {
   try {
     if (!req.file) {
@@ -159,11 +151,10 @@ router.post("/students/import", handleXlsxUpload, async (req, res, next) => {
       });
     }
 
-    const imported = [];
+    const toImport = [];
     const skipped = [];
 
     for (const row of rows) {
-      // Lookup center by name (case-insensitive)
       const centerResult = await query(
         `SELECT id, name FROM centers
          WHERE UPPER(name) = UPPER($1) AND is_active = TRUE`,
@@ -181,7 +172,6 @@ router.post("/students/import", handleXlsxUpload, async (req, res, next) => {
       const centerId = centerResult.rows[0].id;
       const centerName = centerResult.rows[0].name;
 
-      // Check duplicate: same name + same center (active only)
       const dupCheck = await query(
         `SELECT id FROM students
          WHERE UPPER(name) = $1 AND center_id = $2 AND is_active = TRUE`,
@@ -196,16 +186,24 @@ router.post("/students/import", handleXlsxUpload, async (req, res, next) => {
         continue;
       }
 
-      const result = await query(
-        `INSERT INTO students (name, center_id)
-         VALUES ($1, $2)
-         RETURNING id, name, center_id, is_active, created_at`,
-        [row.name, centerId],
-      );
+      toImport.push({ name: row.name, centerId, centerName });
+    }
 
-      imported.push({
-        ...result.rows[0],
-        center_name: centerName,
+    const imported = [];
+    if (toImport.length > 0) {
+      await withTransaction(async (client) => {
+        for (const item of toImport) {
+          const result = await client.query(
+            `INSERT INTO students (name, center_id)
+             VALUES ($1, $2)
+             RETURNING id, name, center_id, is_active, created_at`,
+            [item.name, item.centerId],
+          );
+          imported.push({
+            ...result.rows[0],
+            center_name: item.centerName,
+          });
+        }
       });
     }
 
@@ -559,9 +557,6 @@ router.get("/stock", async (req, res, next) => {
 // MODULES
 // ============================================================
 
-// IMPORTANT: /modules/template and /modules/import must be defined
-// BEFORE /modules/:id to prevent Express matching them as :id param.
-
 router.get("/modules/template", async (req, res, next) => {
   try {
     const workbook = new ExcelJS.Workbook();
@@ -644,7 +639,8 @@ router.post("/modules/import", handleXlsxUpload, async (req, res, next) => {
       });
     }
 
-    const imported = [];
+    // [FIX-1] Pre-validate di luar transaksi
+    const toImport = [];
     const skipped = [];
 
     for (const row of rows) {
@@ -666,13 +662,23 @@ router.post("/modules/import", handleXlsxUpload, async (req, res, next) => {
         continue;
       }
 
-      const result = await query(
-        `INSERT INTO modules (code, name)
-         VALUES ($1, $2)
-         RETURNING id, code, name, is_active, created_at`,
-        [row.code, row.name],
-      );
-      imported.push(result.rows[0]);
+      toImport.push(row);
+    }
+
+    // [FIX-1] Atomik INSERT
+    const imported = [];
+    if (toImport.length > 0) {
+      await withTransaction(async (client) => {
+        for (const item of toImport) {
+          const result = await client.query(
+            `INSERT INTO modules (code, name)
+             VALUES ($1, $2)
+             RETURNING id, code, name, is_active, created_at`,
+            [item.code, item.name],
+          );
+          imported.push(result.rows[0]);
+        }
+      });
     }
 
     logger.info("Modules imported via Excel", {
@@ -899,9 +905,6 @@ router.patch(
 // TEACHERS
 // ============================================================
 
-// IMPORTANT: /teachers/template and /teachers/import must be defined
-// BEFORE /teachers/:id to prevent Express matching them as :id param.
-
 // GET /admin/teachers/template
 router.get("/teachers/template", async (req, res, next) => {
   try {
@@ -941,7 +944,8 @@ router.get("/teachers/template", async (req, res, next) => {
   }
 });
 
-// POST /admin/teachers/import
+// [FIX-1] POST /teachers/import — sama seperti students/import,
+// pre-validate di luar transaksi, INSERT atomik di dalam transaksi.
 router.post("/teachers/import", handleXlsxUpload, async (req, res, next) => {
   try {
     if (!req.file) {
@@ -985,11 +989,11 @@ router.post("/teachers/import", handleXlsxUpload, async (req, res, next) => {
       });
     }
 
-    const imported = [];
+    // [FIX-1] Pre-validate di luar transaksi
+    const toImport = [];
     const skipped = [];
 
     for (const row of rows) {
-      // Check duplicate email
       const dupEmail = await query(`SELECT id FROM users WHERE email = $1`, [
         row.email,
       ]);
@@ -998,7 +1002,6 @@ router.post("/teachers/import", handleXlsxUpload, async (req, res, next) => {
         continue;
       }
 
-      // Lookup center if provided
       let centerId = null;
       let centerName = null;
 
@@ -1021,32 +1024,37 @@ router.post("/teachers/import", handleXlsxUpload, async (req, res, next) => {
         centerName = centerResult.rows[0].name;
       }
 
-      // Insert teacher + assign center in transaction
-      const result = await withTransaction(async (client) => {
-        const userResult = await client.query(
-          `INSERT INTO users (email, name, role, center_id, is_active)
-           VALUES ($1, $2, 'teacher', $3, FALSE)
-           RETURNING id, email, name, role, center_id, is_active, created_at`,
-          [row.email, row.email, centerId],
-        );
+      toImport.push({ email: row.email, centerId, centerName });
+    }
 
-        const teacher = userResult.rows[0];
-
-        if (centerId) {
-          await client.query(
-            `INSERT INTO teacher_centers (teacher_id, center_id, is_primary)
-             VALUES ($1, $2, TRUE)
-             ON CONFLICT (teacher_id, center_id) DO NOTHING`,
-            [teacher.id, centerId],
+    // [FIX-1] Atomik INSERT — semua teacher + teacher_centers dalam satu transaksi
+    const imported = [];
+    if (toImport.length > 0) {
+      await withTransaction(async (client) => {
+        for (const item of toImport) {
+          const userResult = await client.query(
+            `INSERT INTO users (email, name, role, center_id, is_active)
+             VALUES ($1, $2, 'teacher', $3, FALSE)
+             RETURNING id, email, name, role, center_id, is_active, created_at`,
+            [item.email, item.email, item.centerId],
           );
+
+          const teacher = userResult.rows[0];
+
+          if (item.centerId) {
+            await client.query(
+              `INSERT INTO teacher_centers (teacher_id, center_id, is_primary)
+               VALUES ($1, $2, TRUE)
+               ON CONFLICT (teacher_id, center_id) DO NOTHING`,
+              [teacher.id, item.centerId],
+            );
+          }
+
+          imported.push({
+            ...teacher,
+            center_name: item.centerName,
+          });
         }
-
-        return teacher;
-      });
-
-      imported.push({
-        ...result,
-        center_name: centerName,
       });
     }
 
@@ -1082,46 +1090,27 @@ router.get(
       const centerId = resolveCenterId(req, req.query.center_id);
       const { page, limit, offset } = parsePagination(req.query);
 
-      const { whereClause, values } = buildWhere(
-        centerId
-          ? [
-              { col: "u.role", val: "teacher" },
-              {
-                col: "u.is_active",
-                val:
-                  req.query.is_active === undefined
-                    ? undefined
-                    : req.query.is_active === "true",
-              },
-              {
-                col: "u.name",
-                val: req.query.search,
-                op: "ILIKE",
-                transform: (v) => `%${v}%`,
-              },
-            ]
-          : [
-              { col: "u.role", val: "teacher" },
-              {
-                col: "u.is_active",
-                val:
-                  req.query.is_active === undefined
-                    ? undefined
-                    : req.query.is_active === "true",
-              },
-              {
-                col: "u.name",
-                val: req.query.search,
-                op: "ILIKE",
-                transform: (v) => `%${v}%`,
-              },
-            ],
-      );
+      const filters = [
+        { col: "u.role", val: "teacher" },
+        {
+          col: "u.is_active",
+          val:
+            req.query.is_active === undefined
+              ? undefined
+              : req.query.is_active === "true",
+        },
+        {
+          col: "u.name",
+          val: req.query.search,
+          op: "ILIKE",
+          transform: (v) => `%${v}%`,
+        },
+      ];
 
+      const { whereClause, values } = buildWhere(filters);
       const centerJoin = centerId
         ? `JOIN teacher_centers tc_filter ON tc_filter.teacher_id = u.id AND tc_filter.center_id = $${values.length + 1}`
         : "";
-
       const centerValues = centerId ? [centerId] : [];
 
       const orderBy = buildOrderBy(
@@ -1600,7 +1589,6 @@ router.patch(
 // ============================================================
 // ENROLLMENTS
 // ============================================================
-
 router.get(
   "/enrollments",
   validate(listEnrollmentsQuery, "query"),
@@ -1891,13 +1879,11 @@ router.get("/monitoring/upload-status", async (req, res, next) => {
            vu.report_uploaded_at,
            vu.upload_status,
            u.drive_folder_id                               AS teacher_drive_folder_id,
-           -- All cert IDs for this enrollment (print + reprints), comma-separated
            (
              SELECT STRING_AGG(c2.cert_unique_id, ', ' ORDER BY c2.printed_at ASC)
              FROM certificates c2
              WHERE c2.enrollment_id = vu.enrollment_id
            )                                               AS all_cert_ids,
-           -- Original (non-reprint) cert ID only
            (
              SELECT c3.cert_unique_id
              FROM certificates c3
@@ -1906,7 +1892,6 @@ router.get("/monitoring/upload-status", async (req, res, next) => {
              ORDER BY c3.printed_at ASC
              LIMIT 1
            )                                               AS print_cert_id,
-           -- Reprint cert IDs only, comma-separated
            (
              SELECT STRING_AGG(c4.cert_unique_id, ', ' ORDER BY c4.printed_at ASC)
              FROM certificates c4
@@ -2040,6 +2025,16 @@ router.get(
         ? `${whereClause} AND c.is_reprint = TRUE`
         : `WHERE c.is_reprint = TRUE`;
 
+      const baseJoins = `
+        FROM certificates c
+        JOIN enrollments e      ON e.id  = c.enrollment_id
+        JOIN users u            ON u.id  = c.teacher_id
+        JOIN students s         ON s.id  = e.student_id
+        JOIN modules m          ON m.id  = e.module_id
+        JOIN centers cn         ON cn.id = c.center_id
+        LEFT JOIN certificates oc ON oc.id = c.original_cert_id
+      `;
+
       const [dataResult, countResult] = await Promise.all([
         query(
           `SELECT
@@ -2058,13 +2053,7 @@ router.get(
              oc.id                 AS original_cert_id,
              oc.cert_unique_id     AS original_cert_unique_id,
              oc.printed_at         AS original_printed_at
-           FROM certificates c
-           JOIN enrollments e      ON e.id  = c.enrollment_id
-           JOIN users u            ON u.id  = c.teacher_id
-           JOIN students s         ON s.id  = e.student_id
-           JOIN modules m          ON m.id  = e.module_id
-           JOIN centers cn         ON cn.id = c.center_id
-           LEFT JOIN certificates oc ON oc.id = c.original_cert_id
+           ${baseJoins}
            ${reprintWhere}
            ORDER BY c.printed_at DESC
            LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
@@ -2072,9 +2061,7 @@ router.get(
         ),
         query(
           `SELECT COUNT(*)::int AS total
-           FROM certificates c
-           JOIN enrollments e ON e.id = c.enrollment_id
-           JOIN centers cn    ON cn.id = c.center_id
+           ${baseJoins}
            ${reprintWhere}`,
           values,
         ),

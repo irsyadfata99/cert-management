@@ -67,20 +67,6 @@ passport.use(
         const user = existing.rows[0];
 
         if (!user.is_active) {
-          // ── First login: activate account ──────────────────────────────
-          //
-          // Drive folder creation is attempted BEFORE the DB transaction so
-          // that we never end up with an activated account that has a
-          // partially-written Drive folder ID.  If Drive fails we still
-          // activate the account — the admin can set up the folder later via
-          // the "Setup Drive" action in the dashboard.
-          //
-          // Sequence:
-          //   1. Try to create Drive folder (outside transaction — side effect)
-          //   2. Open transaction → activate user + store folder ID atomically
-          //   3. If transaction fails, log that a dangling Drive folder may
-          //      exist so an admin can clean it up.
-
           let driveFolderId = user.drive_folder_id;
           let driveCreatedFolderId = null;
 
@@ -105,20 +91,35 @@ passport.use(
                   email,
                 });
               } else {
-                driveCreatedFolderId = await driveService.createFolder(
+                const existingFolderId = await driveService.findFolderByName(
                   profile.displayName,
                   centerFolderId,
                 );
-                driveFolderId = driveCreatedFolderId;
-                logger.info("Drive folder created for teacher", {
-                  userId: user.id,
-                  folderId: driveFolderId,
-                  basedOnCenter: primaryCenter.center_id,
-                });
+
+                if (existingFolderId) {
+                  driveFolderId = existingFolderId;
+                  logger.info(
+                    "Reusing existing Drive folder for teacher (idempotency)",
+                    {
+                      userId: user.id,
+                      folderId: driveFolderId,
+                      centerFolderId,
+                    },
+                  );
+                } else {
+                  driveCreatedFolderId = await driveService.createFolder(
+                    profile.displayName,
+                    centerFolderId,
+                  );
+                  driveFolderId = driveCreatedFolderId;
+                  logger.info("Drive folder created for teacher", {
+                    userId: user.id,
+                    folderId: driveFolderId,
+                    basedOnCenter: primaryCenter.center_id,
+                  });
+                }
               }
             } catch (driveErr) {
-              // Drive failure is non-fatal — account will still be activated.
-              // Admin can create the folder manually later.
               logger.error("Failed to create Drive folder for teacher", {
                 userId: user.id,
                 error: driveErr.message,
@@ -126,9 +127,6 @@ passport.use(
             }
           }
 
-          // Activate account inside a transaction.  If this fails after
-          // driveCreatedFolderId was set, log a warning so the orphaned
-          // Drive folder can be identified and cleaned up.
           let activatedUser;
           try {
             activatedUser = await withTransaction(async (client) => {
@@ -154,7 +152,8 @@ passport.use(
             if (driveCreatedFolderId) {
               logger.error(
                 "DB transaction failed after Drive folder was created. " +
-                  "Orphaned Drive folder may need manual cleanup.",
+                  "Orphaned Drive folder needs manual cleanup by admin: " +
+                  "delete the folder or re-assign via Setup Drive action.",
                 {
                   userId: user.id,
                   orphanedFolderId: driveCreatedFolderId,

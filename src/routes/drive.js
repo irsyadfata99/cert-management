@@ -61,9 +61,10 @@ const handleMulterError = (err, req, res, next) => {
   next(err);
 };
 
-// ── Helper: resolve center_id ──────────────────────────────
+// ── Helper: resolve center_id untuk stock operations ──────────
 const resolveStockCenterId = (req, paramCenterId) => {
   if (paramCenterId) return parseInt(paramCenterId);
+  if (req.user.role === "teacher") return undefined;
   return req.user.center_id ?? undefined;
 };
 
@@ -442,12 +443,8 @@ router.post(
 
       const certId = parseInt(req.params.id);
       const teacherId = req.user.id;
-
-      // is_reprint flag sent from frontend as form field
-      const isReprint = req.body.is_reprint === "true";
-
       const certCheck = await query(
-        `SELECT c.id, c.scan_file_id, c.enrollment_id,
+        `SELECT c.id, c.scan_file_id, c.is_reprint, c.enrollment_id,
                 s.name AS student_name,
                 m.name AS module_name
          FROM certificates c
@@ -466,6 +463,7 @@ router.post(
       }
 
       const cert = certCheck.rows[0];
+      const isReprint = cert.is_reprint;
       const driveFolderId = req.user.drive_folder_id;
 
       if (!driveFolderId) {
@@ -496,7 +494,6 @@ router.post(
         .replace(/-+/g, "-");
       const ext = req.file.originalname.split(".").pop() || "jpg";
 
-      // Append _REPRINT suffix before extension if this is a reprint scan
       const baseName = isReprint
         ? `${today}_${safeName}_${safeModule}_REPRINT`
         : `${today}_${safeName}_${safeModule}`;
@@ -610,7 +607,8 @@ router.post(
 
       await query(
         `UPDATE reports
-         SET drive_file_id = $1, drive_file_name = $2, drive_uploaded_at = NOW(), updated_at = NOW()
+         SET drive_file_id = $1, drive_file_name = $2,
+             drive_uploaded_at = NOW(), is_draft = FALSE, updated_at = NOW()
          WHERE id = $3`,
         [fileId, uploadedName, reportId],
       );

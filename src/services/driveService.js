@@ -124,6 +124,23 @@ const getFileMetadata = async (fileId) => {
   return { fileId: id, fileName: name, mimeType, size, webViewLink };
 };
 
+const findFolderByName = async (name, parentFolderId) => {
+  const drive = getDrive();
+
+  const response = await withRetry(() =>
+    drive.files.list({
+      q: `name = '${name.replace(/'/g, "\\'")}' and '${parentFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+      fields: "files(id, name)",
+      pageSize: 1,
+    }),
+  );
+
+  const files = response.data.files ?? [];
+  return files.length > 0 ? files[0].id : null;
+};
+
 const createCenterFolder = async (centerName) => {
   return createFolder(centerName, process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID);
 };
@@ -138,6 +155,7 @@ module.exports = {
   downloadFile,
   deleteFile,
   getFileMetadata,
+  findFolderByName,
   createCenterFolder,
   createTeacherFolder,
 };

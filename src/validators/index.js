@@ -193,7 +193,7 @@ const listEnrollmentsQuery = paginationQuery.extend({
       "pending",
       "cert_printed",
       "scan_uploaded",
-      "report_uploaded",
+      "report_drafted",
       "complete",
     ])
     .optional(),
@@ -234,13 +234,6 @@ const listCertsQuery = paginationQuery.extend({
 
 // ── Report Validators ─────────────────────────────────────────
 
-// Create report — supports both draft (is_draft: true) and final submission
-// When is_draft is true:
-//   - content can be empty or short (word count not enforced here, enforced in route)
-//   - all score fields are optional
-// When is_draft is false (default):
-//   - content is required
-//   - word count minimum enforced in route handler
 const createReportBody = z.object({
   enrollment_id: z
     .number({ required_error: "enrollment_id is required" })
@@ -257,8 +250,6 @@ const createReportBody = z.object({
   score_coding_skills: scoreEnum,
 });
 
-// Update report — same draft logic
-// When is_draft: false is passed, it triggers Drive upload in route handler
 const updateReportBody = z
   .object({
     is_draft: z.boolean().optional(),
@@ -343,35 +334,6 @@ const updateThresholdBody = z.object({
     .min(0, "Threshold must be >= 0"),
 });
 
-const addStockBody = z.object({
-  center_id: z.number().int().positive().optional(),
-  type: z.enum(["medal"], {
-    required_error: "type is required",
-  }),
-  quantity: z
-    .number({ required_error: "quantity is required" })
-    .int()
-    .positive("Quantity must be positive"),
-});
-
-const transferStockBody = z.object({
-  type: z.enum(["medal"], {
-    required_error: "type is required",
-  }),
-  from_center_id: z
-    .number({ required_error: "from_center_id is required" })
-    .int()
-    .positive(),
-  to_center_id: z
-    .number({ required_error: "to_center_id is required" })
-    .int()
-    .positive(),
-  quantity: z
-    .number({ required_error: "quantity is required" })
-    .int()
-    .positive(),
-});
-
 // ── Validate Middleware ───────────────────────────────────────
 
 const validate = (schema, target = "body") => {
@@ -426,15 +388,10 @@ module.exports = {
   listCertsQuery,
   createReportBody,
   updateReportBody,
-  // Stock - Certificate Batch
   addCertificateBatchBody,
   transferCertificateBatchBody,
-  // Stock - Medal
   addMedalStockBody,
   transferMedalStockBody,
-  // Stock - General
-  addStockBody,
-  transferStockBody,
   updateThresholdBody,
   idParam,
   paginationQuery,

@@ -3,7 +3,6 @@ const logger = require("../config/logger");
 const BATCH_MAX_SIZE = 100;
 
 const normalizeDbError = (err) => {
-  // Certificate batch errors
   if (
     err.message?.includes("Certificate stock exhausted") ||
     err.message?.includes("No certificate batch found")
@@ -17,7 +16,6 @@ const normalizeDbError = (err) => {
     return normalized;
   }
 
-  // Medal stock errors
   if (
     err.message?.includes("Insufficient medal stock") ||
     err.message?.includes("Stock medali tidak mencukupi")
@@ -30,8 +28,10 @@ const normalizeDbError = (err) => {
   return err;
 };
 
+// ── printSingle ───────────────────────────────────────────────
 const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
   return withTransaction(async (client) => {
+    // Step 1: Validasi enrollment
     const enrollment = await client.query(
       `SELECT e.id FROM enrollments e
        WHERE e.id = $1
@@ -65,8 +65,7 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
       throw err;
     }
 
-    // Cek certificate batch tersedia (sebelum insert)
-    // Lock batch row untuk prevent race condition
+    // Step 2: Lock & validasi certificate batch
     const batchCheck = await client.query(
       `SELECT current_position, range_end
        FROM certificate_stock_batches
@@ -89,15 +88,7 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
       throw err;
     }
 
-    // Kurangi medal stock
-    try {
-      await client.query(`SELECT fn_decrement_medal_stock($1, 1)`, [centerId]);
-    } catch (err) {
-      throw normalizeDbError(err);
-    }
-
-    // Insert certificate — cert_unique_id di-assign otomatis oleh trigger
-    // trigger fn_set_cert_unique_id -> fn_assign_cert_from_batch
+    // Step 3: INSERT certificate
     let certResult;
     try {
       certResult = await client.query(
@@ -112,6 +103,14 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
 
     const cert = certResult.rows[0];
 
+    // Step 4: Kurangi medal stock
+    try {
+      await client.query(`SELECT fn_decrement_medal_stock($1, 1)`, [centerId]);
+    } catch (err) {
+      throw normalizeDbError(err);
+    }
+
+    // Step 5: INSERT medal
     const medalResult = await client.query(
       `INSERT INTO medals (enrollment_id, teacher_id, center_id, ptc_date)
        VALUES ($1, $2, $3, $4)
@@ -135,6 +134,7 @@ const printSingle = async ({ enrollmentId, teacherId, centerId, ptcDate }) => {
   });
 };
 
+// ── printBatch ────────────────────────────────────────────────
 const printBatch = async ({ items, teacherId, centerId }) => {
   if (!items?.length) {
     const err = new Error("No items provided for batch print");
@@ -187,7 +187,7 @@ const printBatch = async ({ items, teacherId, centerId }) => {
       throw err;
     }
 
-    // Lock & cek certificate batch
+    // Lock & validasi certificate batch
     const batchCheck = await client.query(
       `SELECT current_position, range_end
        FROM certificate_stock_batches
@@ -215,22 +215,11 @@ const printBatch = async ({ items, teacherId, centerId }) => {
       throw err;
     }
 
-    // Kurangi medal stock
-    try {
-      await client.query(`SELECT fn_decrement_medal_stock($1, $2)`, [
-        centerId,
-        items.length,
-      ]);
-    } catch (err) {
-      throw normalizeDbError(err);
-    }
-
     const batchIdResult = await client.query(
       `SELECT gen_random_uuid() AS batch_id`,
     );
     const batchId = batchIdResult.rows[0].batch_id;
 
-    // Insert certificates satu per satu agar trigger assign ID berurutan
     const certs = [];
     for (const item of items) {
       let certResult;
@@ -247,7 +236,14 @@ const printBatch = async ({ items, teacherId, centerId }) => {
       certs.push(certResult.rows[0]);
     }
 
-    // Insert medals
+    try {
+      await client.query(`SELECT fn_decrement_medal_stock($1, $2)`, [
+        centerId,
+        items.length,
+      ]);
+    } catch (err) {
+      throw normalizeDbError(err);
+    }
     const medalPlaceholders = items
       .map(
         (_, i) =>
@@ -296,6 +292,7 @@ const printBatch = async ({ items, teacherId, centerId }) => {
   });
 };
 
+// ── reprint ───────────────────────────────────────────────────
 const reprint = async ({ originalCertId, teacherId, centerId, ptcDate }) => {
   return withTransaction(async (client) => {
     const original = await client.query(
@@ -346,7 +343,6 @@ const reprint = async ({ originalCertId, teacherId, centerId, ptcDate }) => {
       throw err;
     }
 
-    // Insert reprint — cert_unique_id di-assign oleh trigger (ID baru dari batch)
     let result;
     try {
       result = await client.query(
