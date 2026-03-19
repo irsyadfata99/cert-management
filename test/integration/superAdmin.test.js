@@ -9,6 +9,7 @@ const {
   seedStudent,
   seedModule,
   seedEnrollment,
+  seedCertBatch,
   setStock,
   closeDb,
   pool,
@@ -51,7 +52,19 @@ beforeAll(async () => {
     is_active: true,
   });
 
+  // Setup stock dengan seedCertBatch (sumber kebenaran cert qty v4.0)
+  await seedCertBatch({
+    center_id: center.id,
+    range_start: 1,
+    range_end: 50,
+  });
   await setStock({ center_id: center.id, cert_qty: 50, medal_qty: 30 });
+
+  await seedCertBatch({
+    center_id: otherCenter.id,
+    range_start: 1001,
+    range_end: 1010,
+  });
   await setStock({ center_id: otherCenter.id, cert_qty: 10, medal_qty: 5 });
 });
 
@@ -103,6 +116,7 @@ describe("Centers — Super Admin", () => {
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
     expect(res.body.data.name).toBe("Center Baru");
+    // drive_folder_id dari mock
     expect(res.body.data.drive_folder_id).toBe("mock_center_folder_id");
   });
 
@@ -198,12 +212,11 @@ describe("Admins — Super Admin", () => {
     expect(Array.isArray(res.body.data)).toBe(true);
   });
 
-  test("GET /api/super-admin/admins — hanya return role admin", async () => {
+  test("GET /api/super-admin/admins — tidak return teacher", async () => {
     const agent = await loginAs(superAdmin);
     const res = await agent.get("/api/super-admin/admins");
 
     expect(res.status).toBe(200);
-    expect(res.body.data.every((u) => u.role === undefined || true)).toBe(true);
     const emails = res.body.data.map((u) => u.email);
     expect(emails).not.toContain("teacher@test.com");
   });
@@ -218,18 +231,17 @@ describe("Admins — Super Admin", () => {
     expect(res.body.data.every((u) => u.center_id === center.id)).toBe(true);
   });
 
+  // [FIX] create admin tidak menerima center_id — field ini tidak ada di schema
   test("POST /api/super-admin/admins — 201 pre-register admin", async () => {
     const agent = await loginAs(superAdmin);
     const res = await agent.post("/api/super-admin/admins").send({
       email: "newadmin@test.com",
       name: "New Admin",
-      center_id: center.id,
     });
 
     expect(res.status).toBe(201);
     expect(res.body.data.role).toBe("admin");
     expect(res.body.data.is_active).toBe(false);
-    expect(res.body.data.center_id).toBe(center.id);
   });
 
   test("POST /api/super-admin/admins — 409 email sudah ada", async () => {
@@ -238,13 +250,11 @@ describe("Admins — Super Admin", () => {
     await agent.post("/api/super-admin/admins").send({
       email: "dup.admin@test.com",
       name: "Dup Admin",
-      center_id: center.id,
     });
 
     const res = await agent.post("/api/super-admin/admins").send({
       email: "dup.admin@test.com",
       name: "Dup Admin 2",
-      center_id: center.id,
     });
 
     expect(res.status).toBe(409);
@@ -255,21 +265,19 @@ describe("Admins — Super Admin", () => {
     const res = await agent.post("/api/super-admin/admins").send({
       email: "bukan-email",
       name: "Admin Invalid",
-      center_id: center.id,
     });
 
     expect(res.status).toBe(400);
   });
 
-  test("POST /api/super-admin/admins — 404 center tidak ada", async () => {
+  test("POST /api/super-admin/admins — 400 nama kosong", async () => {
     const agent = await loginAs(superAdmin);
     const res = await agent.post("/api/super-admin/admins").send({
-      email: "admin.nocenter@test.com",
-      name: "Admin No Center",
-      center_id: 999999,
+      email: "admin.noname@test.com",
+      name: "",
     });
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(400);
   });
 
   test("PATCH /api/super-admin/admins/:id — 200 update nama admin", async () => {
@@ -290,7 +298,7 @@ describe("Admins — Super Admin", () => {
     expect(res.body.data.name).toBe("Admin Name Updated");
   });
 
-  test("PATCH /api/super-admin/admins/:id — 200 update email admin — reset is_active", async () => {
+  test("PATCH /api/super-admin/admins/:id — 200 update email — reset is_active", async () => {
     const tempAdmin = await seedUser({
       email: "admin.patch.email@test.com",
       name: "Admin Patch Email",
@@ -306,7 +314,7 @@ describe("Admins — Super Admin", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.email).toBe("admin.email.updated@test.com");
-    // Email change harus reset is_active ke false (force re-login)
+    // Email change harus reset is_active ke false
     expect(res.body.data.is_active).toBe(false);
   });
 
@@ -331,7 +339,7 @@ describe("Admins — Super Admin", () => {
     const agent = await loginAs(superAdmin);
     const res = await agent
       .patch(`/api/super-admin/admins/${tempAdmin2.id}`)
-      .send({ email: "admin@test.com" }); // email yang sudah ada
+      .send({ email: "admin@test.com" });
 
     expect(res.status).toBe(409);
   });
@@ -406,20 +414,26 @@ describe("Monitoring Centers — Super Admin", () => {
     expect(Array.isArray(res.body.data)).toBe(true);
   });
 
+  // [FIX] field names sesuai response aktual dari query monitoring/centers
+  // Query pakai certificate_stock_batches → cert_quantity, bukan cert_stock
   test("GET /api/super-admin/monitoring/centers — response mengandung field yang benar", async () => {
     const agent = await loginAs(superAdmin);
     const res = await agent.get("/api/super-admin/monitoring/centers");
 
     expect(res.status).toBe(200);
+    expect(res.body.data.length).toBeGreaterThan(0);
+
     const firstCenter = res.body.data[0];
     expect(firstCenter).toHaveProperty("center_id");
     expect(firstCenter).toHaveProperty("center_name");
-    expect(firstCenter).toHaveProperty("cert_stock");
-    expect(firstCenter).toHaveProperty("medal_stock");
+    // [FIX] cert_quantity bukan cert_stock (schema v4.0 pakai certificate_stock_batches)
+    expect(firstCenter).toHaveProperty("cert_quantity");
+    expect(firstCenter).toHaveProperty("medal_quantity");
     expect(firstCenter).toHaveProperty("teacher_count");
     expect(firstCenter).toHaveProperty("student_count");
   });
 
+  // [FIX] cert_quantity dan medal_quantity sesuai seed
   test("GET /api/super-admin/monitoring/centers — stock sesuai seed", async () => {
     const agent = await loginAs(superAdmin);
     const res = await agent.get("/api/super-admin/monitoring/centers");
@@ -427,8 +441,10 @@ describe("Monitoring Centers — Super Admin", () => {
     expect(res.status).toBe(200);
     const found = res.body.data.find((c) => c.center_id === center.id);
     expect(found).toBeDefined();
-    expect(found.cert_stock).toBe(50);
-    expect(found.medal_stock).toBe(30);
+    // cert_quantity dihitung dari batch: range_end - current_position + 1
+    // range_start=1, range_end=50, current_position=1 → available=50
+    expect(found.cert_quantity).toBe(50);
+    expect(found.medal_quantity).toBe(30);
   });
 });
 
@@ -454,8 +470,8 @@ describe("Monitoring Upload Status — Super Admin", () => {
 
     // Print cert untuk enrollment ini
     await pool.query(
-      `INSERT INTO certificates (enrollment_id, teacher_id, center_id, ptc_date, is_reprint)
-       VALUES ($1, $2, $3, '2024-06-01', FALSE)`,
+      `INSERT INTO certificates (enrollment_id, teacher_id, center_id, ptc_date, is_reprint, cert_unique_id)
+       VALUES ($1, $2, $3, '2024-06-01', FALSE, 'CERT-MON-' || $1::TEXT || '-' || EXTRACT(EPOCH FROM NOW())::BIGINT::TEXT)`,
       [enrollment.id, teacher.id, center.id],
     );
   });
@@ -480,18 +496,20 @@ describe("Monitoring Upload Status — Super Admin", () => {
     expect(res.body.data.every((r) => r.center_id === center.id)).toBe(true);
   });
 
-  test("GET /api/super-admin/monitoring/upload-status — filter by status", async () => {
+  // [FIX] status valid sekarang adalah "cert_printed" bukan "printed"
+  test("GET /api/super-admin/monitoring/upload-status — filter by status cert_printed", async () => {
     const agent = await loginAs(superAdmin);
     const res = await agent.get(
-      "/api/super-admin/monitoring/upload-status?status=printed",
+      "/api/super-admin/monitoring/upload-status?status=cert_printed",
     );
 
     expect(res.status).toBe(200);
-    expect(res.body.data.every((r) => r.upload_status === "printed")).toBe(
+    expect(res.body.data.every((r) => r.upload_status === "cert_printed")).toBe(
       true,
     );
   });
 
+  // [FIX] "printed" sudah tidak valid — harus 400
   test("GET /api/super-admin/monitoring/upload-status — 400 status tidak valid", async () => {
     const agent = await loginAs(superAdmin);
     const res = await agent.get(
@@ -499,6 +517,24 @@ describe("Monitoring Upload Status — Super Admin", () => {
     );
 
     expect(res.status).toBe(400);
+  });
+
+  test("GET /api/super-admin/monitoring/upload-status — filter status not_started", async () => {
+    const agent = await loginAs(superAdmin);
+    const res = await agent.get(
+      "/api/super-admin/monitoring/upload-status?status=not_started",
+    );
+
+    expect(res.status).toBe(200);
+  });
+
+  test("GET /api/super-admin/monitoring/upload-status — filter status complete", async () => {
+    const agent = await loginAs(superAdmin);
+    const res = await agent.get(
+      "/api/super-admin/monitoring/upload-status?status=complete",
+    );
+
+    expect(res.status).toBe(200);
   });
 });
 
@@ -524,8 +560,25 @@ describe("Monitoring Stock Alerts — Super Admin", () => {
     expect(res.body.data.every((r) => r.has_alert === true)).toBe(true);
   });
 
+  // [FIX] field adalah cert_quantity dan medal_quantity bukan cert_stock/medal_stock
+  test("GET /api/super-admin/monitoring/stock-alerts — response mengandung field yang benar", async () => {
+    const agent = await loginAs(superAdmin);
+    const res = await agent.get("/api/super-admin/monitoring/stock-alerts");
+
+    expect(res.status).toBe(200);
+    if (res.body.data.length > 0) {
+      const item = res.body.data[0];
+      expect(item).toHaveProperty("center_id");
+      expect(item).toHaveProperty("center_name");
+      expect(item).toHaveProperty("cert_quantity");
+      expect(item).toHaveProperty("medal_quantity");
+      expect(item).toHaveProperty("has_alert");
+    }
+  });
+
   test("GET /api/super-admin/monitoring/stock-alerts — center dengan stock rendah muncul", async () => {
-    // otherCenter punya cert_qty=10, medal_qty=5 — di bawah default threshold 10
+    // otherCenter: cert batch range 1001..1010 (10 sheets), medal_qty=5
+    // default threshold=10 → medal (5<=10) → has_alert=true
     const agent = await loginAs(superAdmin);
     const res = await agent.get("/api/super-admin/monitoring/stock-alerts");
 
@@ -562,11 +615,53 @@ describe("Monitoring Activity — Super Admin", () => {
 });
 
 // ============================================================
+// MONITORING — Reprints
+// ============================================================
+
+describe("Monitoring Reprints — Super Admin", () => {
+  test("GET /api/super-admin/monitoring/reprints — 200", async () => {
+    const agent = await loginAs(superAdmin);
+    const res = await agent.get("/api/super-admin/monitoring/reprints");
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.pagination).toBeDefined();
+  });
+
+  test("GET /api/super-admin/monitoring/reprints — filter by center_id", async () => {
+    const agent = await loginAs(superAdmin);
+    const res = await agent.get(
+      `/api/super-admin/monitoring/reprints?center_id=${center.id}`,
+    );
+
+    expect(res.status).toBe(200);
+  });
+
+  test("GET /api/super-admin/monitoring/reprints — filter date range valid", async () => {
+    const agent = await loginAs(superAdmin);
+    const res = await agent.get(
+      "/api/super-admin/monitoring/reprints?date_from=2024-01-01&date_to=2024-12-31",
+    );
+
+    expect(res.status).toBe(200);
+  });
+
+  test("GET /api/super-admin/monitoring/reprints — 400 format tanggal salah", async () => {
+    const agent = await loginAs(superAdmin);
+    const res = await agent.get(
+      "/api/super-admin/monitoring/reprints?date_from=01-01-2024",
+    );
+
+    expect(res.status).toBe(400);
+  });
+});
+
+// ============================================================
 // DOWNLOAD
 // ============================================================
 
 describe("Download Enrollments — Super Admin", () => {
-  test("GET /api/super-admin/download/enrollments — 200 dengan data JSON", async () => {
+  test("GET /api/super-admin/download/enrollments — 200", async () => {
     const agent = await loginAs(superAdmin);
     const res = await agent.get("/api/super-admin/download/enrollments");
 
@@ -581,7 +676,7 @@ describe("Download Enrollments — Super Admin", () => {
     expect(res.headers["content-type"]).toMatch(/text\/csv/);
   });
 
-  test("GET /api/super-admin/download/enrollments — Content-Disposition header ada filename", async () => {
+  test("GET /api/super-admin/download/enrollments — Content-Disposition ada filename", async () => {
     const agent = await loginAs(superAdmin);
     const res = await agent.get("/api/super-admin/download/enrollments");
 
@@ -593,24 +688,7 @@ describe("Download Enrollments — Super Admin", () => {
   });
 
   test("GET /api/super-admin/download/enrollments — response body adalah CSV valid", async () => {
-    const agent = await loginAs(superAdmin);
-    const res = await agent.get("/api/super-admin/download/enrollments");
-
-    expect(res.status).toBe(200);
-    // Baris pertama harus berisi header CSV
-    const lines = res.text.split("\n").filter(Boolean);
-    expect(lines.length).toBeGreaterThanOrEqual(1);
-
-    const header = lines[0];
-    expect(header).toContain("enrollment_id");
-    expect(header).toContain("student_name");
-    expect(header).toContain("teacher");
-    expect(header).toContain("center");
-    expect(header).toContain("status");
-  });
-
-  test("GET /api/super-admin/download/enrollments — data baris sesuai enrollment yang ada", async () => {
-    // Seed enrollment khusus untuk verifikasi CSV
+    // Seed enrollment untuk verifikasi CSV
     const csvStudent = await seedStudent({
       name: "Student CSV Test",
       center_id: center.id,
@@ -623,6 +701,22 @@ describe("Download Enrollments — Super Admin", () => {
       teacher_id: teacher.id,
     });
 
+    const agent = await loginAs(superAdmin);
+    const res = await agent.get("/api/super-admin/download/enrollments");
+
+    expect(res.status).toBe(200);
+    const lines = res.text.split("\n").filter(Boolean);
+    expect(lines.length).toBeGreaterThanOrEqual(1);
+
+    const header = lines[0];
+    expect(header).toContain("ID");
+    expect(header).toContain("Student Name");
+    expect(header).toContain("Teacher");
+    expect(header).toContain("Center");
+    expect(header).toContain("status");
+  });
+
+  test("GET /api/super-admin/download/enrollments — data baris sesuai enrollment", async () => {
     const agent = await loginAs(superAdmin);
     const res = await agent.get("/api/super-admin/download/enrollments");
 

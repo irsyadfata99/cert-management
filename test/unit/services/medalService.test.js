@@ -1,186 +1,43 @@
-jest.mock("../../../src/config/database", () => ({
-  query: jest.fn(),
-  withTransaction: jest.fn(),
-}));
+/**
+ * medalService.test.js
+ *
+ * Di schema v4.0, medal TIDAK lagi di-print secara terpisah.
+ * Medal dibuat otomatis sebagai bagian dari transaksi print sertifikat
+ * di certificateService.
+ *
+ * Test ini memverifikasi bahwa medalService hanya berisi
+ * fungsi query/list, dan TIDAK export printSingle/printBatch standalone.
+ */
 
-const {
-  printSingle,
-  printBatch,
-} = require("../../../src/services/medalService");
-const { withTransaction } = require("../../../src/config/database");
+require("dotenv").config({ path: ".env.test" });
 
-beforeEach(() => {
-  jest.clearAllMocks();
-});
+const medalService = require("../../../src/services/medalService");
 
-const mockTransaction = (clientQueryMap) => {
-  withTransaction.mockImplementation(async (callback) => {
-    const client = { query: jest.fn() };
-    clientQueryMap(client);
-    return callback(client);
-  });
-};
-
-describe("printSingle medal", () => {
-  test("berhasil print medali", async () => {
-    mockTransaction((client) => {
-      client.query
-        .mockResolvedValueOnce({ rows: [{ id: 1 }] }) // enrollment check
-        .mockResolvedValueOnce({ rows: [] }) // belum ada medal
-        .mockResolvedValueOnce({ rows: [{}] }) // decrement stock
-        .mockResolvedValueOnce({
-          rows: [
-            {
-              id: 1,
-              medal_unique_id: "MEDAL-000001",
-              enrollment_id: 1,
-              teacher_id: 1,
-              center_id: 1,
-              ptc_date: "2024-01-01",
-              printed_at: new Date(),
-            },
-          ],
-        });
-    });
-
-    const result = await printSingle({
-      enrollmentId: 1,
-      teacherId: 1,
-      centerId: 1,
-      ptcDate: "2024-01-01",
-    });
-    expect(result.medal_unique_id).toBe("MEDAL-000001");
+describe("medalService — struktur export", () => {
+  test("TIDAK export printSingle sebagai fungsi standalone", () => {
+    // Medal dicetak otomatis oleh certificateService, bukan oleh medalService
+    // Jika ini gagal, berarti medalService masih punya fungsi lama yang perlu dihapus
+    expect(typeof medalService.printSingle).not.toBe("function");
   });
 
-  test("enrollment tidak ditemukan throw 404", async () => {
-    mockTransaction((client) => {
-      client.query.mockResolvedValueOnce({ rows: [] });
-    });
-
-    await expect(
-      printSingle({
-        enrollmentId: 999,
-        teacherId: 1,
-        centerId: 1,
-        ptcDate: "2024-01-01",
-      }),
-    ).rejects.toMatchObject({ status: 404 });
+  test("TIDAK export printBatch sebagai fungsi standalone", () => {
+    expect(typeof medalService.printBatch).not.toBe("function");
   });
 
-  test("medal sudah pernah di-print throw 409", async () => {
-    mockTransaction((client) => {
-      client.query
-        .mockResolvedValueOnce({ rows: [{ id: 1 }] }) // enrollment ada
-        .mockResolvedValueOnce({ rows: [{ id: 3 }] }); // medal sudah ada
-    });
-
-    await expect(
-      printSingle({
-        enrollmentId: 1,
-        teacherId: 1,
-        centerId: 1,
-        ptcDate: "2024-01-01",
-      }),
-    ).rejects.toMatchObject({ status: 409 });
-  });
-
-  test("stock tidak cukup throw 400", async () => {
-    mockTransaction((client) => {
-      client.query
-        .mockResolvedValueOnce({ rows: [{ id: 1 }] })
-        .mockResolvedValueOnce({ rows: [] })
-        .mockRejectedValueOnce(new Error("Stock medali tidak mencukupi"));
-    });
-
-    await expect(
-      printSingle({
-        enrollmentId: 1,
-        teacherId: 1,
-        centerId: 1,
-        ptcDate: "2024-01-01",
-      }),
-    ).rejects.toMatchObject({ status: 400 });
+  test("medal print terintegrasi di certificateService", () => {
+    const certService = require("../../../src/services/certificateService");
+    // certificateService harus export printSingle yang juga membuat medal
+    expect(typeof certService.printSingle).toBe("function");
+    expect(typeof certService.printBatch).toBe("function");
   });
 });
 
-describe("printBatch medal", () => {
-  test("items kosong throw 400", async () => {
-    await expect(
-      printBatch({ items: [], teacherId: 1, centerId: 1 }),
-    ).rejects.toMatchObject({ status: 400 });
+describe("medalService — fungsi yang tersedia", () => {
+  test("module dapat di-require tanpa error", () => {
+    expect(() => require("../../../src/services/medalService")).not.toThrow();
   });
 
-  test("berhasil print batch", async () => {
-    mockTransaction((client) => {
-      client.query
-        .mockResolvedValueOnce({ rows: [{ id: 1 }, { id: 2 }] }) // enrollment valid (2 rows)
-        .mockResolvedValueOnce({ rows: [] }) // tidak ada duplikat
-        .mockResolvedValueOnce({ rows: [{}] }) // decrement stock
-        .mockResolvedValueOnce({ rows: [{ batch_id: "uuid-456" }] }) // gen uuid
-        .mockResolvedValueOnce({
-          rows: [
-            {
-              id: 1,
-              medal_unique_id: "MEDAL-000001",
-              enrollment_id: 1,
-              batch_id: "uuid-456",
-              printed_at: new Date(),
-            },
-            {
-              id: 2,
-              medal_unique_id: "MEDAL-000002",
-              enrollment_id: 2,
-              batch_id: "uuid-456",
-              printed_at: new Date(),
-            },
-          ],
-        });
-    });
-
-    const result = await printBatch({
-      items: [
-        { enrollmentId: 1, ptcDate: "2024-01-01" },
-        { enrollmentId: 2, ptcDate: "2024-01-01" },
-      ],
-      teacherId: 1,
-      centerId: 1,
-    });
-
-    expect(result.medals).toHaveLength(2);
-    expect(result.batchId).toBe("uuid-456");
-  });
-
-  test("salah satu enrollment tidak ditemukan throw 404", async () => {
-    mockTransaction((client) => {
-      // hanya return 1 dari 2 enrollment
-      client.query.mockResolvedValueOnce({ rows: [{ id: 1 }] });
-    });
-
-    await expect(
-      printBatch({
-        items: [
-          { enrollmentId: 1, ptcDate: "2024-01-01" },
-          { enrollmentId: 999, ptcDate: "2024-01-01" },
-        ],
-        teacherId: 1,
-        centerId: 1,
-      }),
-    ).rejects.toMatchObject({ status: 404 });
-  });
-
-  test("duplikat medal throw 409", async () => {
-    mockTransaction((client) => {
-      client.query
-        .mockResolvedValueOnce({ rows: [{ id: 1 }] }) // enrollment valid (1 row untuk 1 item)
-        .mockResolvedValueOnce({ rows: [{ enrollment_id: 1 }] }); // sudah pernah print
-    });
-
-    await expect(
-      printBatch({
-        items: [{ enrollmentId: 1, ptcDate: "2024-01-01" }],
-        teacherId: 1,
-        centerId: 1,
-      }),
-    ).rejects.toMatchObject({ status: 409 });
+  test("module adalah object", () => {
+    expect(typeof medalService).toBe("object");
   });
 });

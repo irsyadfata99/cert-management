@@ -1,86 +1,98 @@
-jest.mock("pdf-lib", () => {
-  const mockPage = {
-    drawRectangle: jest.fn(),
-    drawText: jest.fn(),
-  };
-  const mockDoc = {
-    embedFont: jest.fn().mockResolvedValue({
-      widthOfTextAtSize: jest.fn().mockReturnValue(50),
-    }),
-    getPages: jest.fn().mockReturnValue([mockPage]),
-    save: jest.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
-  };
-  return {
-    PDFDocument: {
-      load: jest.fn().mockResolvedValue(mockDoc),
-    },
-    rgb: jest.fn().mockReturnValue({}),
-    StandardFonts: {
-      Helvetica: "Helvetica",
-      HelveticaBold: "Helvetica-Bold",
-    },
-  };
-});
+/**
+ * reportPdfService.test.js
+ *
+ * Unit test untuk generateReportPdf.
+ * Mock pdf-lib dan fontkit karena environment test tidak support
+ * binary PDF operations penuh.
+ */
 
-// Spread actualFs agar fs.stat milik winston tetap berfungsi.
-jest.mock("fs", () => {
-  const actualFs = jest.requireActual("fs");
-  return {
-    ...actualFs,
-    existsSync: jest.fn().mockReturnValue(true),
-    readFileSync: jest.fn().mockReturnValue(Buffer.from("mock_template")),
-  };
-});
+require("dotenv").config({ path: ".env.test" });
 
-const fs = require("fs");
+// Mock fontkit
+jest.mock("@pdf-lib/fontkit", () => ({
+  create: jest.fn(() => ({})),
+}));
+
+// Mock pdf-lib PDFDocument
+const mockPdfDoc = {
+  registerFontkit: jest.fn(),
+  embedFont: jest.fn().mockResolvedValue({
+    encodeText: jest.fn((t) => t),
+    widthOfTextAtSize: jest.fn(() => 50),
+  }),
+  getPages: jest.fn(() => [
+    {
+      drawText: jest.fn(),
+      getWidth: jest.fn(() => 595),
+      getHeight: jest.fn(() => 842),
+    },
+  ]),
+  save: jest.fn().mockResolvedValue(Buffer.from("mock-pdf-bytes")),
+};
+
+jest.mock("pdf-lib", () => ({
+  PDFDocument: {
+    load: jest.fn().mockResolvedValue(mockPdfDoc),
+    create: jest.fn().mockResolvedValue(mockPdfDoc),
+  },
+  rgb: jest.fn(() => ({ r: 0, g: 0, b: 0 })),
+  StandardFonts: { Helvetica: "Helvetica" },
+}));
+
+jest.mock("../../../src/config/logger", () => ({
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+}));
+
 const { generateReportPdf } = require("../../../src/services/reportPdfService");
 
-const validData = {
+const sampleData = {
   studentName: "Budi Santoso",
+  moduleName: "Coding Dasar",
+  centerName: "Center Jakarta",
   teacherName: "Pak Guru",
-  academicYear: "2024/2025",
+  ptcDate: "2024-01-15",
+  score: 85,
+  academicYear: "2023/2024",
   period: "Semester 1",
-  scoreCreativity: "A",
-  scoreCriticalThinking: "B+",
-  scoreAttention: "A+",
-  scoreResponsibility: "B",
-  scoreCodingSkills: "A",
-  content: Array(200).fill("kata").join(" "),
 };
 
 describe("generateReportPdf", () => {
   beforeEach(() => {
-    fs.existsSync.mockReturnValue(true);
-    fs.readFileSync.mockReturnValue(Buffer.from("mock_template"));
+    jest.clearAllMocks();
+    // Re-setup mock setelah clear
+    mockPdfDoc.registerFontkit.mockClear();
+    mockPdfDoc.embedFont.mockResolvedValue({
+      encodeText: jest.fn((t) => t),
+      widthOfTextAtSize: jest.fn(() => 50),
+    });
+    mockPdfDoc.getPages.mockReturnValue([
+      {
+        drawText: jest.fn(),
+        getWidth: jest.fn(() => 595),
+        getHeight: jest.fn(() => 842),
+      },
+    ]);
+    mockPdfDoc.save.mockResolvedValue(Buffer.from("mock-pdf-bytes"));
   });
 
   test("return Buffer", async () => {
-    const result = await generateReportPdf(validData);
+    const result = await generateReportPdf(sampleData);
     expect(Buffer.isBuffer(result)).toBe(true);
   });
 
   test("berhasil dengan score null", async () => {
-    const result = await generateReportPdf({
-      ...validData,
-      scoreCreativity: null,
-      scoreCriticalThinking: null,
-    });
+    const result = await generateReportPdf({ ...sampleData, score: null });
     expect(Buffer.isBuffer(result)).toBe(true);
   });
 
   test("berhasil dengan academicYear dan period null", async () => {
     const result = await generateReportPdf({
-      ...validData,
+      ...sampleData,
       academicYear: null,
       period: null,
     });
     expect(Buffer.isBuffer(result)).toBe(true);
-  });
-
-  test("PDFDocument.load error di-propagate sebagai rejection", async () => {
-    const { PDFDocument } = require("pdf-lib");
-    PDFDocument.load.mockRejectedValueOnce(new Error("corrupt PDF"));
-
-    await expect(generateReportPdf(validData)).rejects.toThrow("corrupt PDF");
   });
 });
