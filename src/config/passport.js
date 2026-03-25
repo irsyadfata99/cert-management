@@ -1,7 +1,6 @@
 const passport = require("passport");
 const { Strategy: GoogleStrategy } = require("passport-google-oauth20");
 const { query, withTransaction } = require("./database");
-const driveService = require("../services/driveService");
 const logger = require("./logger");
 
 passport.serializeUser((user, done) => {
@@ -67,63 +66,51 @@ passport.use(
         const user = existing.rows[0];
 
         if (!user.is_active) {
-          let driveFolderId = user.drive_folder_id;
-          let driveCreatedFolderId = null;
+          // ── First login: activate account ─────────────────────────────
 
-          if (user.role === "teacher" && !driveFolderId) {
-            try {
-              const centersResult = await query(
-                `SELECT tc.center_id, tc.is_primary, c.drive_folder_id AS center_drive_folder_id
-                 FROM teacher_centers tc
-                 JOIN centers c ON c.id = tc.center_id
-                 WHERE tc.teacher_id = $1
-                   AND c.is_active = TRUE
-                 ORDER BY tc.is_primary DESC`,
-                [user.id],
-              );
+          if (user.role === "teacher") {
+            const missingFolders = await query(
+              `SELECT tc.center_id, c.name AS center_name
+               FROM teacher_centers tc
+               JOIN centers c ON c.id = tc.center_id
+               WHERE tc.teacher_id = $1
+                 AND tc.drive_folder_id IS NULL
+                 AND c.is_active = TRUE`,
+              [user.id],
+            );
 
-              const primaryCenter = centersResult.rows[0];
-              const centerFolderId = primaryCenter?.center_drive_folder_id;
-
-              if (!centerFolderId) {
-                logger.warn("Teacher center has no Drive folder yet", {
+            if (missingFolders.rows.length > 0) {
+              const centerNames = missingFolders.rows
+                .map((r) => r.center_name)
+                .join(", ");
+              logger.warn(
+                "Teacher has centers without Drive folder. Admin must re-assign centers to create folders.",
+                {
                   userId: user.id,
                   email,
-                });
-              } else {
-                const existingFolderId = await driveService.findFolderByName(
-                  profile.displayName,
-                  centerFolderId,
-                );
+                  centersWithoutFolder: centerNames,
+                },
+              );
+            }
+          }
 
-                if (existingFolderId) {
-                  driveFolderId = existingFolderId;
-                  logger.info(
-                    "Reusing existing Drive folder for teacher (idempotency)",
-                    {
-                      userId: user.id,
-                      folderId: driveFolderId,
-                      centerFolderId,
-                    },
-                  );
-                } else {
-                  driveCreatedFolderId = await driveService.createFolder(
-                    profile.displayName,
-                    centerFolderId,
-                  );
-                  driveFolderId = driveCreatedFolderId;
-                  logger.info("Drive folder created for teacher", {
-                    userId: user.id,
-                    folderId: driveFolderId,
-                    basedOnCenter: primaryCenter.center_id,
-                  });
-                }
-              }
-            } catch (driveErr) {
-              logger.error("Failed to create Drive folder for teacher", {
-                userId: user.id,
-                error: driveErr.message,
-              });
+          // Ambil drive_folder_id dari primary center (untuk backward compat)
+          let driveFolderId = user.drive_folder_id;
+
+          if (user.role === "teacher" && !driveFolderId) {
+            const primaryCenter = await query(
+              `SELECT tc.drive_folder_id
+               FROM teacher_centers tc
+               WHERE tc.teacher_id = $1
+                 AND tc.is_primary = TRUE`,
+              [user.id],
+            );
+
+            if (
+              primaryCenter.rows.length > 0 &&
+              primaryCenter.rows[0].drive_folder_id
+            ) {
+              driveFolderId = primaryCenter.rows[0].drive_folder_id;
             }
           }
 
@@ -149,18 +136,13 @@ passport.use(
               return result.rows[0];
             });
           } catch (txErr) {
-            if (driveCreatedFolderId) {
-              logger.error(
-                "DB transaction failed after Drive folder was created. " +
-                  "Orphaned Drive folder needs manual cleanup by admin: " +
-                  "delete the folder or re-assign via Setup Drive action.",
-                {
-                  userId: user.id,
-                  orphanedFolderId: driveCreatedFolderId,
-                  error: txErr.message,
-                },
-              );
-            }
+            logger.error(
+              "DB transaction failed during first login activation",
+              {
+                userId: user.id,
+                error: txErr.message,
+              },
+            );
             throw txErr;
           }
 

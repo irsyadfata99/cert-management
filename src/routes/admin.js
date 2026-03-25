@@ -27,6 +27,7 @@ const {
   idParam,
   paginationQuery,
 } = require("../validators");
+const driveService = require("../services/driveService");
 const logger = require("../config/logger");
 
 const router = express.Router();
@@ -67,6 +68,59 @@ const handleXlsxUpload = (req, res, next) => {
 const resolveCenterId = (req, paramCenterId) => {
   if (paramCenterId) return parseInt(paramCenterId);
   return undefined;
+};
+
+// ── Helper: create Drive folder for teacher in a center ──────
+// Returns folderId or throws error if center has no Drive folder
+const createTeacherFolderInCenter = async (teacherName, centerId) => {
+  const centerResult = await query(
+    `SELECT id, name, drive_folder_id FROM centers WHERE id = $1 AND is_active = TRUE`,
+    [centerId],
+  );
+
+  if (centerResult.rows.length === 0) {
+    const err = new Error("Center not found or inactive");
+    err.status = 404;
+    throw err;
+  }
+
+  const center = centerResult.rows[0];
+
+  if (!center.drive_folder_id) {
+    const err = new Error(
+      `Center "${center.name}" does not have a Drive folder set up. Please set up the Drive folder for this center first.`,
+    );
+    err.status = 400;
+    throw err;
+  }
+
+  // Check if folder already exists (idempotency)
+  const existingFolderId = await driveService.findFolderByName(
+    teacherName,
+    center.drive_folder_id,
+  );
+
+  if (existingFolderId) {
+    logger.info("Reusing existing Drive folder for teacher (idempotency)", {
+      teacherName,
+      centerId,
+      folderId: existingFolderId,
+    });
+    return existingFolderId;
+  }
+
+  const folderId = await driveService.createFolder(
+    teacherName,
+    center.drive_folder_id,
+  );
+
+  logger.info("Drive folder created for teacher in center", {
+    teacherName,
+    centerId,
+    folderId,
+  });
+
+  return folderId;
 };
 
 // GET /admin/students/template
@@ -998,10 +1052,11 @@ router.post("/teachers/import", handleXlsxUpload, async (req, res, next) => {
 
       let centerId = null;
       let centerName = null;
+      let centerDriveFolderId = null;
 
       if (row.centerName) {
         const centerResult = await query(
-          `SELECT id, name FROM centers
+          `SELECT id, name, drive_folder_id FROM centers
            WHERE UPPER(name) = UPPER($1) AND is_active = TRUE`,
           [row.centerName],
         );
@@ -1016,39 +1071,93 @@ router.post("/teachers/import", handleXlsxUpload, async (req, res, next) => {
 
         centerId = centerResult.rows[0].id;
         centerName = centerResult.rows[0].name;
+        centerDriveFolderId = centerResult.rows[0].drive_folder_id;
+
+        if (!centerDriveFolderId) {
+          skipped.push({
+            ...row,
+            reason: `Center "${centerName}" does not have a Drive folder set up`,
+          });
+          continue;
+        }
       }
 
-      toImport.push({ email: row.email, centerId, centerName });
+      toImport.push({
+        email: row.email,
+        centerId,
+        centerName,
+        centerDriveFolderId,
+      });
     }
 
     const imported = [];
     if (toImport.length > 0) {
-      await withTransaction(async (client) => {
-        for (const item of toImport) {
-          const userResult = await client.query(
-            `INSERT INTO users (email, name, role, center_id, is_active)
-             VALUES ($1, $2, 'teacher', $3, FALSE)
-             RETURNING id, email, name, role, center_id, is_active, created_at`,
-            [item.email, item.email, item.centerId],
-          );
+      for (const item of toImport) {
+        let driveFolderId = null;
+        let driveCreatedFolderId = null;
 
-          const teacher = userResult.rows[0];
-
-          if (item.centerId) {
-            await client.query(
-              `INSERT INTO teacher_centers (teacher_id, center_id, is_primary)
-               VALUES ($1, $2, TRUE)
-               ON CONFLICT (teacher_id, center_id) DO NOTHING`,
-              [teacher.id, item.centerId],
+        if (item.centerId && item.centerDriveFolderId) {
+          try {
+            driveFolderId = await createTeacherFolderInCenter(
+              item.email,
+              item.centerId,
+            );
+            driveCreatedFolderId = driveFolderId;
+          } catch (driveErr) {
+            logger.error(
+              "Failed to create Drive folder during teacher import",
+              {
+                email: item.email,
+                centerId: item.centerId,
+                error: driveErr.message,
+              },
             );
           }
+        }
 
-          imported.push({
-            ...teacher,
-            center_name: item.centerName,
+        try {
+          await withTransaction(async (client) => {
+            const userResult = await client.query(
+              `INSERT INTO users (email, name, role, center_id, drive_folder_id, is_active)
+               VALUES ($1, $2, 'teacher', $3, $4, FALSE)
+               RETURNING id, email, name, role, center_id, drive_folder_id, is_active, created_at`,
+              [item.email, item.email, item.centerId, driveFolderId],
+            );
+
+            const teacher = userResult.rows[0];
+
+            if (item.centerId) {
+              await client.query(
+                `INSERT INTO teacher_centers (teacher_id, center_id, is_primary, drive_folder_id)
+                 VALUES ($1, $2, TRUE, $3)
+                 ON CONFLICT (teacher_id, center_id) DO UPDATE SET drive_folder_id = EXCLUDED.drive_folder_id`,
+                [teacher.id, item.centerId, driveFolderId],
+              );
+            }
+
+            imported.push({
+              ...teacher,
+              center_name: item.centerName,
+            });
+          });
+        } catch (txErr) {
+          if (driveCreatedFolderId) {
+            logger.error(
+              "DB transaction failed after Drive folder was created during import. Orphaned folder needs manual cleanup.",
+              {
+                email: item.email,
+                orphanedFolderId: driveCreatedFolderId,
+                error: txErr.message,
+              },
+            );
+          }
+          skipped.push({
+            email: item.email,
+            centerName: item.centerName,
+            reason: txErr.message,
           });
         }
-      });
+      }
     }
 
     logger.info("Teachers imported via Excel", {
@@ -1132,7 +1241,7 @@ router.get(
 
       if (teacherIds.length > 0) {
         const centersResult = await query(
-          `SELECT tc.teacher_id, tc.center_id, tc.is_primary, c.name AS center_name
+          `SELECT tc.teacher_id, tc.center_id, tc.is_primary, tc.drive_folder_id, c.name AS center_name
          FROM teacher_centers tc
          JOIN centers c ON c.id = tc.center_id
          WHERE tc.teacher_id = ANY($1)
@@ -1146,6 +1255,7 @@ router.get(
             center_id: row.center_id,
             center_name: row.center_name,
             is_primary: row.is_primary,
+            drive_folder_id: row.drive_folder_id,
           });
         }
       }
@@ -1179,56 +1289,77 @@ router.post(
           .json({ success: false, message: "center_id is required" });
       }
 
-      const centerCheck = await query(
-        `SELECT id FROM centers WHERE id = $1 AND is_active = TRUE`,
-        [centerId],
-      );
-      if (centerCheck.rows.length === 0) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Center not found or inactive" });
+      // Validate center exists and has Drive folder
+      let driveFolderId = null;
+      let driveCreatedFolderId = null;
+
+      try {
+        driveFolderId = await createTeacherFolderInCenter(name, centerId);
+        driveCreatedFolderId = driveFolderId;
+      } catch (driveErr) {
+        return res.status(driveErr.status ?? 500).json({
+          success: false,
+          message: driveErr.message,
+        });
       }
 
-      const result = await withTransaction(async (client) => {
-        const userResult = await client.query(
-          `INSERT INTO users (email, name, role, center_id, is_active)
-         VALUES ($1, $2, 'teacher', $3, FALSE)
-         ON CONFLICT (email) DO NOTHING
-         RETURNING id, email, name, role, center_id, is_active, created_at`,
-          [email.toLowerCase(), name, centerId],
-        );
+      let result;
+      try {
+        result = await withTransaction(async (client) => {
+          const userResult = await client.query(
+            `INSERT INTO users (email, name, role, center_id, drive_folder_id, is_active)
+             VALUES ($1, $2, 'teacher', $3, $4, FALSE)
+             ON CONFLICT (email) DO NOTHING
+             RETURNING id, email, name, role, center_id, drive_folder_id, is_active, created_at`,
+            [email.toLowerCase(), name, centerId, driveFolderId],
+          );
 
-        if (userResult.rows.length === 0) {
-          const err = new Error("Email already registered");
-          err.status = 409;
-          throw err;
+          if (userResult.rows.length === 0) {
+            const err = new Error("Email already registered");
+            err.status = 409;
+            throw err;
+          }
+
+          const teacher = userResult.rows[0];
+
+          await client.query(
+            `INSERT INTO teacher_centers (teacher_id, center_id, is_primary, drive_folder_id)
+             VALUES ($1, $2, TRUE, $3)
+             ON CONFLICT (teacher_id, center_id) DO UPDATE SET drive_folder_id = EXCLUDED.drive_folder_id`,
+            [teacher.id, centerId, driveFolderId],
+          );
+
+          return teacher;
+        });
+      } catch (txErr) {
+        if (driveCreatedFolderId) {
+          logger.error(
+            "DB transaction failed after Drive folder was created. Orphaned Drive folder needs manual cleanup.",
+            {
+              teacherName: name,
+              orphanedFolderId: driveCreatedFolderId,
+              error: txErr.message,
+            },
+          );
         }
-
-        const teacher = userResult.rows[0];
-
-        await client.query(
-          `INSERT INTO teacher_centers (teacher_id, center_id, is_primary)
-         VALUES ($1, $2, TRUE)
-         ON CONFLICT (teacher_id, center_id) DO NOTHING`,
-          [teacher.id, centerId],
-        );
-
-        return teacher;
-      });
+        if (txErr.status) {
+          return res
+            .status(txErr.status)
+            .json({ success: false, message: txErr.message });
+        }
+        throw txErr;
+      }
 
       logger.info("Teacher pre-registered", {
         teacherId: result.id,
         email,
         centerId,
+        driveFolderId,
         createdBy: req.user.id,
       });
 
       res.status(201).json({ success: true, data: result });
     } catch (err) {
-      if (err.status)
-        return res
-          .status(err.status)
-          .json({ success: false, message: err.message });
       next(err);
     }
   },
@@ -1338,10 +1469,10 @@ router.post(
 
       const teacherCheck = await query(
         adminCenterId
-          ? `SELECT id FROM users
+          ? `SELECT id, name FROM users
              WHERE id = $1 AND role = 'teacher'
                AND (center_id = $2 OR center_id IS NULL)`
-          : `SELECT id FROM users WHERE id = $1 AND role = 'teacher'`,
+          : `SELECT id, name FROM users WHERE id = $1 AND role = 'teacher'`,
         adminCenterId ? [req.params.id, adminCenterId] : [req.params.id],
       );
       if (teacherCheck.rows.length === 0) {
@@ -1350,45 +1481,71 @@ router.post(
           .json({ success: false, message: "Teacher not found" });
       }
 
-      const centerCheck = await query(
-        `SELECT id FROM centers WHERE id = $1 AND is_active = TRUE`,
-        [center_id],
-      );
-      if (centerCheck.rows.length === 0) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Center not found or inactive" });
+      const teacher = teacherCheck.rows[0];
+
+      // Create Drive folder for teacher in this center
+      let driveFolderId = null;
+      let driveCreatedFolderId = null;
+
+      try {
+        driveFolderId = await createTeacherFolderInCenter(
+          teacher.name,
+          center_id,
+        );
+        driveCreatedFolderId = driveFolderId;
+      } catch (driveErr) {
+        return res.status(driveErr.status ?? 500).json({
+          success: false,
+          message: driveErr.message,
+        });
       }
 
-      const result = await withTransaction(async (client) => {
-        if (is_primary) {
-          await client.query(
-            `UPDATE teacher_centers SET is_primary = FALSE
-           WHERE teacher_id = $1 AND is_primary = TRUE`,
-            [req.params.id],
+      let result;
+      try {
+        result = await withTransaction(async (client) => {
+          if (is_primary) {
+            await client.query(
+              `UPDATE teacher_centers SET is_primary = FALSE
+             WHERE teacher_id = $1 AND is_primary = TRUE`,
+              [req.params.id],
+            );
+            await client.query(
+              `UPDATE users SET center_id = $1, drive_folder_id = $2, updated_at = NOW() WHERE id = $3`,
+              [center_id, driveFolderId, req.params.id],
+            );
+          }
+
+          const insertResult = await client.query(
+            `INSERT INTO teacher_centers (teacher_id, center_id, is_primary, drive_folder_id)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (teacher_id, center_id)
+             DO UPDATE SET is_primary = EXCLUDED.is_primary, drive_folder_id = EXCLUDED.drive_folder_id
+             RETURNING teacher_id, center_id, is_primary, drive_folder_id, created_at`,
+            [req.params.id, center_id, is_primary ?? false, driveFolderId],
           );
-          await client.query(
-            `UPDATE users SET center_id = $1, updated_at = NOW() WHERE id = $2`,
-            [center_id, req.params.id],
+
+          return insertResult.rows[0];
+        });
+      } catch (txErr) {
+        if (driveCreatedFolderId) {
+          logger.error(
+            "DB transaction failed after Drive folder was created. Orphaned Drive folder needs manual cleanup.",
+            {
+              teacherId: req.params.id,
+              centerId: center_id,
+              orphanedFolderId: driveCreatedFolderId,
+              error: txErr.message,
+            },
           );
         }
+        throw txErr;
+      }
 
-        const insertResult = await client.query(
-          `INSERT INTO teacher_centers (teacher_id, center_id, is_primary)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (teacher_id, center_id)
-         DO UPDATE SET is_primary = EXCLUDED.is_primary
-         RETURNING teacher_id, center_id, is_primary, created_at`,
-          [req.params.id, center_id, is_primary ?? false],
-        );
-
-        return insertResult.rows[0];
-      });
-
-      logger.info("Teacher assigned to center", {
+      logger.info("Teacher assigned to center with Drive folder", {
         teacherId: req.params.id,
         centerId: center_id,
         isPrimary: is_primary,
+        driveFolderId,
         assignedBy: req.user.id,
       });
 
@@ -1457,14 +1614,18 @@ router.delete("/teachers/:id/centers/:centerId", async (req, res, next) => {
                ORDER BY created_at ASC
                LIMIT 1
              )
-           RETURNING center_id`,
+           RETURNING center_id, drive_folder_id`,
           [teacherId],
         );
 
         if (newPrimary.rows.length > 0) {
           await client.query(
-            `UPDATE users SET center_id = $1, updated_at = NOW() WHERE id = $2`,
-            [newPrimary.rows[0].center_id, teacherId],
+            `UPDATE users SET center_id = $1, drive_folder_id = $2, updated_at = NOW() WHERE id = $3`,
+            [
+              newPrimary.rows[0].center_id,
+              newPrimary.rows[0].drive_folder_id,
+              teacherId,
+            ],
           );
         }
       }
@@ -1519,7 +1680,7 @@ router.get(
       }
 
       const result = await query(
-        `SELECT tc.center_id, c.name AS center_name, tc.is_primary, tc.created_at
+        `SELECT tc.center_id, c.name AS center_name, tc.is_primary, tc.drive_folder_id, tc.created_at
        FROM teacher_centers tc
        JOIN centers c ON c.id = tc.center_id
        WHERE tc.teacher_id = $1
@@ -1885,7 +2046,7 @@ router.get("/monitoring/upload-status", async (req, res, next) => {
            vu.report_drive_file_id,
            vu.report_uploaded_at,
            vu.upload_status,
-           u.drive_folder_id                               AS teacher_drive_folder_id,
+           tc.drive_folder_id                              AS teacher_drive_folder_id,
            (
              SELECT STRING_AGG(c2.cert_unique_id, ', ' ORDER BY c2.printed_at ASC)
              FROM certificates c2
@@ -1908,6 +2069,7 @@ router.get("/monitoring/upload-status", async (req, res, next) => {
          FROM vw_teacher_upload_status vu
          JOIN enrollments e ON e.id = vu.enrollment_id
          JOIN users u ON u.id = vu.teacher_id
+         LEFT JOIN teacher_centers tc ON tc.teacher_id = vu.teacher_id AND tc.center_id = e.center_id
          ${whereClause}
          ORDER BY vu.upload_status, vu.teacher_name
          LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
@@ -2039,6 +2201,7 @@ router.get(
         JOIN students s         ON s.id  = e.student_id
         JOIN modules m          ON m.id  = e.module_id
         JOIN centers cn         ON cn.id = c.center_id
+        LEFT JOIN teacher_centers tc ON tc.teacher_id = u.id AND tc.center_id = c.center_id
         LEFT JOIN certificates oc ON oc.id = c.original_cert_id
       `;
 
@@ -2052,7 +2215,7 @@ router.get(
              u.id                  AS teacher_id,
              u.name                AS teacher_name,
              u.email               AS teacher_email,
-             u.drive_folder_id     AS teacher_drive_folder_id,
+             tc.drive_folder_id    AS teacher_drive_folder_id,
              s.name                AS student_name,
              m.name                AS module_name,
              cn.id                 AS center_id,

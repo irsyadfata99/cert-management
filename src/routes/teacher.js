@@ -28,7 +28,6 @@ router.use(apiLimiter);
 const teacherContext = (req) => ({
   teacherId: req.user.id,
   centerId: req.user.center_id,
-  driveFolderId: req.user.drive_folder_id,
   teacherName: req.user.name,
 });
 
@@ -42,6 +41,22 @@ const resolveEnrollmentCenter = async (enrollmentId, teacherId) => {
 
   if (result.rows.length === 0) return null;
   return result.rows[0].center_id;
+};
+
+// [FIX Bug 1] Helper untuk mendapatkan drive folder teacher di center tertentu
+const getTeacherDriveFolderForCenter = async (teacherId, centerId) => {
+  const result = await query(
+    `SELECT tc.drive_folder_id
+     FROM teacher_centers tc
+     WHERE tc.teacher_id = $1 AND tc.center_id = $2`,
+    [teacherId, centerId],
+  );
+
+  if (result.rows.length === 0 || !result.rows[0].drive_folder_id) {
+    return null;
+  }
+
+  return result.rows[0].drive_folder_id;
 };
 
 router.get("/enrollments", async (req, res, next) => {
@@ -359,7 +374,6 @@ router.get("/reports", async (req, res, next) => {
   }
 });
 
-// ── GET /teacher/reports/draft/:enrollmentId ──────────────────
 router.get("/reports/draft/:enrollmentId", async (req, res, next) => {
   try {
     const { teacherId } = teacherContext(req);
@@ -387,10 +401,9 @@ router.get("/reports/draft/:enrollmentId", async (req, res, next) => {
   }
 });
 
-// ── POST /teacher/reports ─────────────────────────────────────
 router.post("/reports", validate(createReportBody), async (req, res, next) => {
   try {
-    const { teacherId, driveFolderId, teacherName } = teacherContext(req);
+    const { teacherId, teacherName } = teacherContext(req);
     const {
       enrollment_id,
       is_draft,
@@ -406,7 +419,7 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
 
     // Validasi enrollment
     const enrollment = await query(
-      `SELECT e.id, s.name AS student_name
+      `SELECT e.id, e.center_id, s.name AS student_name
        FROM enrollments e
        JOIN students s ON s.id = e.student_id
        WHERE e.id = $1
@@ -426,7 +439,8 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
       });
     }
 
-    const { student_name: studentName } = enrollment.rows[0];
+    const { student_name: studentName, center_id: centerId } =
+      enrollment.rows[0];
 
     if (!is_draft) {
       const scanCheck = await query(
@@ -462,6 +476,7 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
         message: `Report content must be at least ${wordCountResult.min} words. Current: ${wordCountResult.count} words.`,
       });
     }
+
     const result = await query(
       `INSERT INTO reports (
          enrollment_id, teacher_id, academic_year, period,
@@ -507,17 +522,28 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
       });
     }
 
+    // [FIX Bug 1] Ambil drive folder dari teacher_centers berdasarkan center enrollment
+    const driveFolderId = await getTeacherDriveFolderForCenter(
+      teacherId,
+      centerId,
+    );
+
     if (!driveFolderId) {
-      logger.warn("Auto upload skipped: teacher has no Drive folder", {
-        teacherId,
-        reportId: report.id,
-      });
+      logger.warn(
+        "Auto upload skipped: teacher has no Drive folder for this center",
+        {
+          teacherId,
+          centerId,
+          reportId: report.id,
+        },
+      );
       return res.status(201).json({
         success: true,
         data: {
           ...report,
           drive_upload_failed: true,
-          drive_upload_error: "Drive folder not set up yet. Contact admin.",
+          drive_upload_error:
+            "Drive folder not set up for this center. Contact admin to re-assign your center.",
         },
       });
     }
@@ -567,6 +593,7 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
         fileId,
         teacherId,
         enrollmentId: enrollment_id,
+        centerId,
       });
 
       return res.status(201).json({
@@ -583,6 +610,7 @@ router.post("/reports", validate(createReportBody), async (req, res, next) => {
       logger.error("Report PDF upload failed", {
         reportId: report.id,
         teacherId,
+        centerId,
         error: driveErr.message,
       });
 
@@ -607,7 +635,7 @@ router.patch(
   validate(updateReportBody),
   async (req, res, next) => {
     try {
-      const { teacherId, driveFolderId, teacherName } = teacherContext(req);
+      const { teacherId, teacherName } = teacherContext(req);
       const {
         is_draft,
         academic_year,
@@ -625,6 +653,7 @@ router.patch(
                 r.academic_year, r.period, r.enrollment_id,
                 r.score_creativity, r.score_critical_thinking, r.score_attention,
                 r.score_responsibility, r.score_coding_skills,
+                e.center_id,
                 s.name AS student_name
          FROM reports r
          JOIN enrollments e ON e.id = r.enrollment_id
@@ -670,6 +699,7 @@ router.patch(
         }
         wordCount = wordCountResult.count;
       }
+
       const dirtyFields = {
         content: content !== undefined ? content : undefined,
         word_count: wordCount,
@@ -730,7 +760,6 @@ router.patch(
         isFinalizing,
       });
 
-      // Jika bukan finalize → return langsung
       if (!isFinalizing) {
         return res.status(200).json({
           success: true,
@@ -738,14 +767,20 @@ router.patch(
         });
       }
 
-      // Finalize → upload ke Drive
+      // [FIX Bug 1] Ambil drive folder dari teacher_centers berdasarkan center enrollment
+      const driveFolderId = await getTeacherDriveFolderForCenter(
+        teacherId,
+        existingData.center_id,
+      );
+
       if (!driveFolderId) {
         return res.status(200).json({
           success: true,
           data: {
             ...updatedReport,
             drive_upload_failed: true,
-            drive_upload_error: "Drive folder not set up yet.",
+            drive_upload_error:
+              "Drive folder not set up for this center. Contact admin to re-assign your center.",
           },
         });
       }
@@ -818,6 +853,7 @@ router.patch(
           fileId,
           teacherId,
           enrollmentId: existingData.enrollment_id,
+          centerId: existingData.center_id,
         });
 
         return res.status(200).json({
@@ -834,6 +870,7 @@ router.patch(
         logger.error("Report PDF upload failed during finalize", {
           reportId: req.params.id,
           teacherId,
+          centerId: existingData.center_id,
           error: driveErr.message,
         });
 
@@ -871,7 +908,8 @@ router.get("/stock", async (req, res, next) => {
          COALESCE(ms.quantity, 0)                                          AS medal_quantity,
          COALESCE(ms.low_stock_threshold, 10)                             AS medal_threshold,
          COALESCE(ms.quantity, 0) <= COALESCE(ms.low_stock_threshold, 10) AS medal_low_stock,
-         tc.is_primary
+         tc.is_primary,
+         tc.drive_folder_id
        FROM teacher_centers tc
        JOIN centers c                        ON c.id = tc.center_id
        LEFT JOIN certificate_stock_batches b ON b.center_id = c.id

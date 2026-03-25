@@ -36,10 +36,11 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- 4. TEACHER_CENTERS (junction — multi-center support)
 CREATE TABLE IF NOT EXISTS teacher_centers (
-  teacher_id  INTEGER   NOT NULL REFERENCES users (id)    ON DELETE CASCADE,
-  center_id   INTEGER   NOT NULL REFERENCES centers (id)  ON DELETE CASCADE,
-  is_primary  BOOLEAN   NOT NULL DEFAULT FALSE,
-  created_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+  teacher_id       INTEGER   NOT NULL REFERENCES users (id)    ON DELETE CASCADE,
+  center_id        INTEGER   NOT NULL REFERENCES centers (id)  ON DELETE CASCADE,
+  is_primary       BOOLEAN   NOT NULL DEFAULT FALSE,
+  drive_folder_id  TEXT,
+  created_at       TIMESTAMP NOT NULL DEFAULT NOW(),
   PRIMARY KEY (teacher_id, center_id)
 );
 
@@ -364,7 +365,6 @@ DECLARE
   v_transfer_start INTEGER;
   v_transfer_end   INTEGER;
   v_available      INTEGER;
-  -- [FIX-3] Tentukan urutan lock berdasarkan center_id
   v_lock_first     INTEGER;
   v_lock_second    INTEGER;
 BEGIN
@@ -378,19 +378,16 @@ BEGIN
   v_lock_first  := LEAST(p_from_center, p_to_center);
   v_lock_second := GREATEST(p_from_center, p_to_center);
 
-  -- Lock pertama (ID lebih kecil)
   PERFORM id
   FROM    certificate_stock_batches
   WHERE   center_id = v_lock_first
   FOR UPDATE;
 
-  -- Lock kedua (ID lebih besar)
   PERFORM id
   FROM    certificate_stock_batches
   WHERE   center_id = v_lock_second
   FOR UPDATE;
 
-  -- Setelah kedua baris ter-lock, baca data aktual
   SELECT * INTO v_from
   FROM   certificate_stock_batches
   WHERE  center_id = p_from_center;
@@ -499,7 +496,6 @@ BEGIN
     RAISE EXCEPTION 'Center asal dan tujuan tidak boleh sama';
   END IF;
 
-  -- Hanya 'medal' yang relevan; 'certificate' ditangani fn_transfer_certificate_batch
   IF p_type = 'medal' THEN
     UPDATE medal_stock
     SET    quantity   = quantity - p_quantity,
@@ -690,7 +686,6 @@ SELECT
     WHEN r.id IS NOT NULL AND r.is_draft = TRUE     THEN 'report_drafted'
     WHEN r.id IS NOT NULL                           THEN 'complete'
     WHEN cert.scan_file_id IS NOT NULL              THEN 'scan_uploaded'
-    -- [FIX-2] Diubah dari 'printed' → 'cert_printed'
     WHEN cert.id           IS NOT NULL              THEN 'cert_printed'
     ELSE                                                 'not_started'
   END                   AS upload_status
@@ -752,8 +747,6 @@ WHERE  c.is_active = TRUE
 ORDER  BY am.month DESC, c.name;
 
 
--- [v4.0] vw_stock_alerts menggunakan certificate_stock_batches
---        sebagai satu-satunya sumber data quantity sertifikat.
 CREATE OR REPLACE VIEW vw_stock_alerts AS
 SELECT
   c.id                                                              AS center_id,
@@ -778,6 +771,15 @@ LEFT JOIN  certificate_stock_batches b  ON b.center_id = c.id
 LEFT JOIN  certificate_stock     cs     ON cs.center_id = c.id
 LEFT JOIN  medal_stock           ms     ON ms.center_id = c.id
 WHERE  c.is_active = TRUE;
+
+
+-- ============================================================
+-- MIGRATION: existing database
+-- Run this if the database already exists
+-- ============================================================
+
+ALTER TABLE teacher_centers
+  ADD COLUMN IF NOT EXISTS drive_folder_id TEXT;
 
 
 -- ============================================================
