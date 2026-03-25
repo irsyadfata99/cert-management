@@ -435,8 +435,11 @@ router.post(
       const certId = parseInt(req.params.id);
       const teacherId = req.user.id;
 
+      // [FIX Bug 3] Hapus constraint e.is_active = TRUE agar reprint bisa diupload
+      // setelah enrollment dinonaktifkan. Validasi tetap memastikan cert milik teacher ini.
       const certCheck = await query(
-        `SELECT c.id, c.scan_file_id, c.is_reprint, c.enrollment_id,
+        `SELECT c.id, c.scan_file_id, c.is_reprint, c.cert_unique_id,
+                c.enrollment_id, e.center_id,
                 s.name AS student_name,
                 m.name AS module_name
          FROM certificates c
@@ -444,29 +447,41 @@ router.post(
          JOIN students s    ON s.id = e.student_id
          JOIN modules m     ON m.id = e.module_id
          WHERE c.id = $1
-           AND e.teacher_id = $2
-           AND e.is_active = TRUE`,
+           AND e.teacher_id = $2`,
         [certId, teacherId],
       );
 
       if (certCheck.rows.length === 0) {
         return res.status(404).json({
           success: false,
-          message:
-            "Certificate not found, not assigned to you, or enrollment is no longer active",
+          message: "Certificate not found or not assigned to you",
         });
       }
 
       const cert = certCheck.rows[0];
       const isReprint = cert.is_reprint;
-      const driveFolderId = req.user.drive_folder_id;
 
-      if (!driveFolderId) {
+      // [FIX Bug 1] Ambil drive folder dari teacher_centers berdasarkan center enrollment,
+      // bukan dari users.drive_folder_id (yang hanya folder primary center)
+      const folderResult = await query(
+        `SELECT tc.drive_folder_id
+         FROM teacher_centers tc
+         WHERE tc.teacher_id = $1 AND tc.center_id = $2`,
+        [teacherId, cert.center_id],
+      );
+
+      if (
+        folderResult.rows.length === 0 ||
+        !folderResult.rows[0].drive_folder_id
+      ) {
         return res.status(400).json({
           success: false,
-          message: "Drive folder not set up yet. Contact admin.",
+          message:
+            "Drive folder not set up for this center. Contact admin to re-assign your center.",
         });
       }
+
+      const driveFolderId = folderResult.rows[0].drive_folder_id;
 
       if (cert.scan_file_id) {
         try {
@@ -489,9 +504,11 @@ router.post(
         .replace(/-+/g, "-");
       const ext = req.file.originalname.split(".").pop() || "jpg";
 
+      // [FIX Bug 3] Nama file reprint menggunakan cert_unique_id reprint
+      // agar berbeda dari scan original, dengan suffix REPRINT
       const baseName = isReprint
-        ? `${today}_${safeName}_${safeModule}_REPRINT`
-        : `${today}_${safeName}_${safeModule}`;
+        ? `${today}_${safeName}_${safeModule}_${cert.cert_unique_id}_REPRINT`
+        : `${today}_${safeName}_${safeModule}_${cert.cert_unique_id}`;
       const fileName = `${baseName}.${ext}`;
 
       const { fileId, fileName: uploadedName } = await driveService.uploadFile({
@@ -510,9 +527,11 @@ router.post(
 
       logger.info("Certificate scan uploaded", {
         certId,
+        certUniqueId: cert.cert_unique_id,
         fileId,
         teacherId,
         isReprint,
+        centerId: cert.center_id,
       });
 
       res.status(200).json({
@@ -555,10 +574,11 @@ router.post(
 
       const reportId = parseInt(req.params.id);
       const teacherId = req.user.id;
-      const driveFolderId = req.user.drive_folder_id;
 
       const reportCheck = await query(
-        `SELECT r.id, r.drive_file_id, r.enrollment_id, s.name AS student_name
+        `SELECT r.id, r.drive_file_id, r.enrollment_id,
+                e.center_id,
+                s.name AS student_name
          FROM reports r
          JOIN enrollments e ON e.id = r.enrollment_id
          JOIN students s    ON s.id = e.student_id
@@ -582,12 +602,26 @@ router.post(
         });
       }
 
-      if (!driveFolderId) {
+      // [FIX Bug 1] Ambil drive folder dari teacher_centers berdasarkan center enrollment
+      const folderResult = await query(
+        `SELECT tc.drive_folder_id
+         FROM teacher_centers tc
+         WHERE tc.teacher_id = $1 AND tc.center_id = $2`,
+        [teacherId, report.center_id],
+      );
+
+      if (
+        folderResult.rows.length === 0 ||
+        !folderResult.rows[0].drive_folder_id
+      ) {
         return res.status(400).json({
           success: false,
-          message: "Drive folder not set up yet. Contact admin.",
+          message:
+            "Drive folder not set up for this center. Contact admin to re-assign your center.",
         });
       }
+
+      const driveFolderId = folderResult.rows[0].drive_folder_id;
 
       const today = new Date().toISOString().split("T")[0];
       const safeName = report.student_name.replace(/[^a-zA-Z0-9]/g, "_");
@@ -618,6 +652,7 @@ router.post(
         fileId,
         teacherId,
         enrollmentId: report.enrollment_id,
+        centerId: report.center_id,
       });
 
       res.status(200).json({
